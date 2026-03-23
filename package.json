@@ -1,0 +1,37 @@
+{
+  "name": "callguard",
+  "version": "1.0.0",
+  "description": "AI-powered voice receptionist for local service businesses",
+  "main": "src/index.js",
+  "scripts": {
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma migrate reset"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wombatvagina69-crypto/CallGuard.git"
+  },
+  "keywords": [
+    "twilio",
+    "openai",
+    "voice",
+    "receptionist",
+    "prisma",
+    "postgresql"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/wombatvagina69-crypto/CallGuard/issues"
+  },
+  "homepage": "https://github.com/wombatvagina69-crypto/CallGuard#readme",
+  "devDependencies": {
+    "@prisma/client": "^7.5.0",
+    "dotenv": "^17.3.1",
+    "prisma": "^7.5.0"
+  }
+}
