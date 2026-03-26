@@ -14,6 +14,9 @@ info()  { printf "${GREEN}✔ %s${NC}\n" "$*"; }
 warn()  { printf "${YELLOW}⚠ %s${NC}\n" "$*"; }
 error() { printf "${RED}✖ %s${NC}\n" "$*"; exit 1; }
 
+# ── cd to this script's directory (repo root) ────────────────────────────────
+cd "$(dirname "$0")"
+
 # ── Pre-flight checks ────────────────────────────────────────────────────────
 command -v node  >/dev/null 2>&1 || error "Node.js is required. Install it from https://nodejs.org"
 command -v npm   >/dev/null 2>&1 || error "npm is required (ships with Node.js)"
@@ -31,23 +34,23 @@ echo ""
 
 # ── Step 1: Root dependencies (Prisma CLI + client) ──────────────────────────
 info "Installing root dependencies …"
-npm install --silent
+npm install
 
 # ── Step 2: Server dependencies ──────────────────────────────────────────────
 info "Installing server dependencies …"
-(cd server && npm install --silent)
+(cd server && npm install)
 
 # ── Step 3: Environment files ────────────────────────────────────────────────
 if [ ! -f .env ]; then
   cp .env.example .env
-  warn "Created .env – edit it to set your DATABASE_URL"
+  warn "Created .env from template – edit it to set your DATABASE_URL"
 else
   info ".env already exists, skipping"
 fi
 
 if [ ! -f server/.env ]; then
   cp server/.env.example server/.env
-  warn "Created server/.env – edit it to add your Twilio, Google & OpenAI keys"
+  warn "Created server/.env from template – edit it to add your Twilio, Google & OpenAI keys"
 else
   info "server/.env already exists, skipping"
 fi
@@ -55,11 +58,15 @@ fi
 # ── Step 4: Database migration (only if DATABASE_URL looks real) ─────────────
 DB_URL=$(grep -E '^DATABASE_URL=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
 
-if [ -n "$DB_URL" ] && ! echo "$DB_URL" | grep -qE '(password@localhost|USER:PASSWORD|xxxxx)'; then
+if [ -n "$DB_URL" ] && ! echo "$DB_URL" | grep -qiE '(USER:PASSWORD|xxxxx|your_|password@localhost)'; then
   info "Running database migrations …"
-  npm run db:migrate
-  info "Generating Prisma client …"
-  npm run db:generate
+  if npm run db:migrate 2>&1; then
+    info "Generating Prisma client …"
+    npm run db:generate
+  else
+    warn "Database migration failed – is PostgreSQL running? You can retry later:"
+    echo "    npm run db:migrate && npm run db:generate"
+  fi
 else
   warn "Skipping database migration – update DATABASE_URL in .env first, then run:"
   echo "    npm run db:migrate && npm run db:generate"

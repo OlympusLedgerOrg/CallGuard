@@ -59,6 +59,7 @@ npm start                            # → http://localhost:3000
 | `server/.env` | `OPENAI_API_KEY` | OpenAI API key |
 | `server/.env` | `PORT` | Server port (default: `3000`) |
 | `server/.env` | `BASE_URL` | Public URL for Twilio webhooks (e.g. ngrok) |
+| `server/.env` | `OWNER_PHONE` | Phone number for missed-call / job-alert SMS |
 
 ### Exposing for Twilio Webhooks
 
