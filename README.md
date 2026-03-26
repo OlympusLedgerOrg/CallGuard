@@ -84,6 +84,64 @@ npx ngrok http 3000
 | `npm run db:studio` | Open Prisma Studio (visual DB browser) |
 | `npm run db:reset` | Drop and recreate the database (dev only) |
 
+## Mobile App (iOS & Android)
+
+The `mobile/` directory contains an [Expo](https://expo.dev) React Native app that wraps the CallGuard dashboard as a native iOS and Android application. It adds push notifications for incoming calls, native splash screen, and proper app store distribution.
+
+### Quick Start
+
+```bash
+cd mobile
+npm install
+npx expo start          # opens Expo dev tools
+```
+
+Scan the QR code with **Expo Go** ([iOS](https://apps.apple.com/app/expo-go/id982107779) / [Android](https://play.google.com/store/apps/details?id=host.exp.exponent)) to run the app on your phone.
+
+> **Note:** Set your server URL in `mobile/src/config.js` to your machine's LAN IP (e.g. `http://192.168.1.42:3000`) so the phone can reach the backend over your local network.
+
+### Build for App Stores
+
+CallGuard uses [EAS Build](https://docs.expo.dev/build/introduction/) to create production binaries:
+
+```bash
+cd mobile
+npm install -g eas-cli
+eas login                          # sign in to your Expo account
+eas build --platform ios           # → .ipa for App Store
+eas build --platform android       # → .aab for Google Play
+```
+
+Configure store credentials in `mobile/eas.json` before submitting:
+
+```bash
+eas submit --platform ios          # upload to App Store Connect
+eas submit --platform android      # upload to Google Play Console
+```
+
+### Mobile Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npx expo start` | Start Expo dev server |
+| `npx expo start --ios` | Launch in iOS Simulator |
+| `npx expo start --android` | Launch in Android Emulator |
+| `npm run build:ios` | Build iOS binary via EAS |
+| `npm run build:android` | Build Android binary via EAS |
+| `npm run build:all` | Build both platforms |
+| `npm run submit:ios` | Submit to App Store Connect |
+| `npm run submit:android` | Submit to Google Play Console |
+
+### Features
+
+- **WebView shell** – wraps the full CallGuard web dashboard natively
+- **Push notifications** – native alerts for incoming calls
+- **Android back button** – navigates within the app
+- **Dark theme** – matches the web UI's dark palette
+- **Error recovery** – shows a retry screen when the server is unreachable
+- **Deep linking** – notification taps open the relevant screen
+- **Splash screen** – native splash while the app loads
+
 ## Architecture
 
 ```
@@ -121,6 +179,7 @@ The database is designed around 7 core tables:
 - **Database**: PostgreSQL (Supabase / Neon / self-hosted)
 - **Voice**: Twilio + OpenAI Realtime API
 - **Calendar**: Google Calendar API
+- **Mobile**: [Expo](https://expo.dev) (React Native) – iOS & Android
 
 ## Prerequisites
 
@@ -173,3 +232,4 @@ npm test
 - [x] **Week 2** – STT + dialogue engine + TTS round trip
 - [x] **Week 3** – Booking flow + Google Calendar + SMS confirmation
 - [x] **Week 4** – Owner dashboard API + WebSocket for live calls
+- [x] **Week 5** – Mobile app for iOS & Android (Expo)
