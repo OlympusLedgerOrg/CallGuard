@@ -58,7 +58,7 @@ fi
 # ── Step 4: Database migration (only if DATABASE_URL looks real) ─────────────
 DB_URL=$(grep -E '^DATABASE_URL=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
 
-if [ -n "$DB_URL" ] && ! echo "$DB_URL" | grep -qiE '(USER:PASSWORD|xxxxx|your_|password@localhost)'; then
+if [ -n "$DB_URL" ] && ! echo "$DB_URL" | grep -qiE '(USER:PASSWORD|xxxxx|password@localhost)'; then
   info "Running database migrations …"
   if npm run db:migrate 2>&1; then
     info "Generating Prisma client …"

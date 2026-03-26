@@ -49,7 +49,7 @@ npm start                            # → http://localhost:3000
 | File | Variable | Description |
 |------|----------|-------------|
 | `.env` | `DATABASE_URL` | PostgreSQL connection string |
-| `.env` | `NODE_ENV` | `development` or `production` |
+| `server/.env` | `NODE_ENV` | `development` or `production` |
 | `server/.env` | `TWILIO_ACCOUNT_SID` | Twilio account SID |
 | `server/.env` | `TWILIO_AUTH_TOKEN` | Twilio auth token |
 | `server/.env` | `TWILIO_PHONE_NUMBER` | Your Twilio phone number |
