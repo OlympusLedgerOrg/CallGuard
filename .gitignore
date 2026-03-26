@@ -6,6 +6,10 @@ coverage/
 .DS_Store
 /generated/prisma
 
+# SQLite database files
+/data/*.db
+/data/*.db-journal
+
 # Mobile (Expo)
 mobile/.expo/
 mobile/ios/

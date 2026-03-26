@@ -4,12 +4,18 @@
 // while the existing Prisma schema may use PascalCase model names.
 // This module provides both access patterns.
 
+const path = require("path");
+
 let db;
+
+// Default SQLite database URL (file in repo root data/ dir)
+const defaultDbUrl = "file:" + path.resolve(__dirname, "../../../data/callguard.db");
 
 try {
   // Try the custom output path used by prisma.config.ts first
   const { PrismaClient } = require("../../../generated/prisma");
   db = new PrismaClient({
+    datasourceUrl: process.env.DATABASE_URL || defaultDbUrl,
     log: process.env.NODE_ENV === "production" ? ["error"] : ["error", "warn"],
   });
 } catch {
@@ -17,6 +23,7 @@ try {
     // Fallback to default @prisma/client
     const { PrismaClient } = require("@prisma/client");
     db = new PrismaClient({
+      datasourceUrl: process.env.DATABASE_URL || defaultDbUrl,
       log: process.env.NODE_ENV === "production" ? ["error"] : ["error", "warn"],
     });
   } catch {

@@ -1,6 +1,8 @@
 # CallGuard
 
-AI-powered voice receptionist for local service businesses — built on Twilio, OpenAI, and PostgreSQL.
+AI-powered voice receptionist for local service businesses — built on Twilio, Ava (local dialogue engine), and SQLite.
+
+**No external database needed.** Everything runs in the app.
 
 ## Quick Start
 
@@ -12,13 +14,14 @@ cd CallGuard
 ./setup.sh
 ```
 
-The setup script installs all dependencies, creates `.env` files from templates, and runs database migrations when a valid `DATABASE_URL` is configured. After setup, edit the env files with your credentials and start the server:
+The setup script installs all dependencies, creates the SQLite database, runs migrations, and generates the Prisma client automatically. After setup, add your API keys and start the server:
 
 ```bash
+# Edit server/.env with your Twilio / Google Calendar keys
 npm start              # → http://localhost:3000
 ```
 
-### Option B: Docker (includes PostgreSQL)
+### Option B: Docker
 
 ```bash
 git clone https://github.com/wombatvagina69-crypto/CallGuard.git
@@ -27,7 +30,7 @@ cp server/.env.example server/.env   # add your Twilio / Google / OpenAI keys
 docker compose up                    # → http://localhost:3000
 ```
 
-Docker Compose starts a PostgreSQL database and the CallGuard server together. No local Node.js or database install needed.
+Docker Compose starts the CallGuard server with a built-in SQLite database. No external database install needed.
 
 ### Option C: Manual Setup
 
@@ -35,8 +38,7 @@ Docker Compose starts a PostgreSQL database and the CallGuard server together. N
 git clone https://github.com/wombatvagina69-crypto/CallGuard.git
 cd CallGuard
 npm install                          # root deps (Prisma)
-cp .env.example .env                 # set DATABASE_URL
-npm run db:migrate                   # create tables
+npm run db:migrate                   # create SQLite tables (data/callguard.db)
 npm run db:generate                  # generate Prisma client
 cd server
 npm install                          # server deps
@@ -48,17 +50,17 @@ npm start                            # → http://localhost:3000
 
 | File | Variable | Description |
 |------|----------|-------------|
-| `.env` | `DATABASE_URL` | PostgreSQL connection string |
-| `.env` | `NODE_ENV` | `development` or `production` |
+| `server/.env` | `NODE_ENV` | `development` or `production` |
 | `server/.env` | `TWILIO_ACCOUNT_SID` | Twilio account SID |
 | `server/.env` | `TWILIO_AUTH_TOKEN` | Twilio auth token |
 | `server/.env` | `TWILIO_PHONE_NUMBER` | Your Twilio phone number |
 | `server/.env` | `GOOGLE_CLIENT_EMAIL` | Google service account email |
 | `server/.env` | `GOOGLE_PRIVATE_KEY` | Google service account private key |
 | `server/.env` | `GOOGLE_CALENDAR_ID` | Google Calendar ID (default: `primary`) |
-| `server/.env` | `OPENAI_API_KEY` | OpenAI API key |
+| `server/.env` | `OPENAI_API_KEY` | OpenAI API key (optional) |
 | `server/.env` | `PORT` | Server port (default: `3000`) |
 | `server/.env` | `BASE_URL` | Public URL for Twilio webhooks (e.g. ngrok) |
+| `server/.env` | `OWNER_PHONE` | Phone number for missed-call / job-alert SMS |
 
 ### Exposing for Twilio Webhooks
 
@@ -207,16 +209,18 @@ The database is designed around 8 core tables:
 
 - **Runtime**: Node.js
 - **ORM**: [Prisma](https://www.prisma.io/)
-- **Database**: PostgreSQL (Supabase / Neon / self-hosted)
-- **Voice**: Twilio + OpenAI Realtime API
+- **Database**: SQLite (built-in, file-based — no external server needed)
+- **Voice**: Twilio (handles PSTN/SIP call routing)
 - **Dialogue**: Ava — local rule engine, regex intent matching, no LLM (zero per-call cost)
-- **Calendar**: Google Calendar API
+- **Calendar**: Google Calendar API (free tier)
+- **SMS**: Twilio SMS (optional, cheap)
 - **Mobile**: [Expo](https://expo.dev) (React Native) – iOS & Android
 
 ## Prerequisites
 
 - **Node.js 18+** — [Download](https://nodejs.org)
-- **PostgreSQL** — local, [Supabase](https://supabase.com/), [Neon](https://neon.tech/), or via Docker Compose (included)
+- **Twilio account** — [Sign up](https://www.twilio.com/try-twilio) (for phone number + SMS)
+- No database server needed — SQLite is built in
 
 ## API Endpoints
 
@@ -307,9 +311,10 @@ npm test
 | Twilio phone number | $1/month |
 | Twilio per-minute (inbound) | $0.013/min |
 | Twilio SMS | $0.0079/message |
-| Railway (DB + server) | $5/month |
-| STT (Twilio Enhanced) | included |
-| TTS (Polly via Twilio) | included |
+| SQLite database | **$0** (built-in) |
+| Ava dialogue engine | **$0** (local, no LLM) |
+| Google Calendar API | **$0** (free tier) |
+| Hosting (Railway / VPS) | ~$5/month |
 | **Total fixed** | **~$6/month** |
 
-Scales with call volume — no flat LLM API bill.
+Scales with call volume — no flat LLM API bill. No database hosting costs.
