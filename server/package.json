@@ -30,5 +30,8 @@
   "devDependencies": {
     "jest": "^29.7.0",
     "supertest": "^7.0.0"
+  },
+  "overrides": {
+    "brace-expansion": ">=5.0.5"
   }
 }
