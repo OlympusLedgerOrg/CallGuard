@@ -18,9 +18,9 @@ error() { printf "${RED}✖ %s${NC}\n" "$*"; exit 1; }
 command -v node  >/dev/null 2>&1 || error "Node.js is required. Install it from https://nodejs.org"
 command -v npm   >/dev/null 2>&1 || error "npm is required (ships with Node.js)"
 
-NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
-if [ "$NODE_VERSION" -lt 18 ]; then
-  error "Node.js 18+ is required (found v$(node -v))"
+NODE_VERSION=$(node -v | grep -oE '^v[0-9]+' | tr -d 'v')
+if [ -z "$NODE_VERSION" ] || [ "$NODE_VERSION" -lt 18 ]; then
+  error "Node.js 18+ is required (found $(node -v))"
 fi
 
 echo ""
@@ -55,7 +55,7 @@ fi
 # ── Step 4: Database migration (only if DATABASE_URL looks real) ─────────────
 DB_URL=$(grep -E '^DATABASE_URL=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
 
-if [ -n "$DB_URL" ] && [ "$DB_URL" != "postgresql://postgres:password@localhost:5432/callguard?schema=public" ]; then
+if [ -n "$DB_URL" ] && ! echo "$DB_URL" | grep -qE '(password@localhost|USER:PASSWORD|xxxxx)'; then
   info "Running database migrations …"
   npm run db:migrate
   info "Generating Prisma client …"
