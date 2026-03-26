@@ -1,0 +1,157 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Businesses ──────────────────────────────────────────────────────────────
+// Stores each business owner's account and configuration.
+model Business {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String
+  ownerName           String    @map("owner_name")
+  email               String    @unique
+  phone               String?
+  serviceArea         String[]  @map("service_area")
+  serviceCategories   String[]  @map("service_categories")
+  hoursOfOperation    Json?     @map("hours_of_operation")
+  emergencyRate       Int?      @map("emergency_rate")
+  emergencyHours      Json?     @map("emergency_hours")
+  systemPrompt        String?   @map("system_prompt")
+  voice               String    @default("alloy") @db.VarChar(20)
+  timezone            String    @default("America/New_York")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  twilioNumbers TwilioNumber[]
+  calls         Call[]
+  appointments  Appointment[]
+  oauthTokens   OauthToken[]
+  smsLogs       SmsLog[]
+
+  @@map("businesses")
+}
+
+// ─── Twilio Numbers ───────────────────────────────────────────────────────────
+// Links Twilio phone numbers to businesses.
+model TwilioNumber {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId  String   @map("business_id") @db.Uuid
+  phoneNumber String   @unique @map("phone_number")
+  sid         String   @unique
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@map("twilio_numbers")
+}
+
+// ─── Calls ────────────────────────────────────────────────────────────────────
+// One row per inbound call.
+model Call {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId     String   @map("business_id") @db.Uuid
+  twilioCallSid  String   @unique @map("twilio_call_sid")
+  callerNumber   String   @map("caller_number")
+  callerName     String?  @map("caller_name")
+  zipCode        String?  @map("zip_code")
+  serviceType    String?  @map("service_type")
+  urgency        String?
+  outcome        String?
+  appointmentId  String?  @map("appointment_id") @db.Uuid
+  durationSeconds Int?    @map("duration_seconds")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transcript  Transcript?
+  appointment Appointment? @relation("CallAppointment", fields: [appointmentId], references: [id], onDelete: SetNull)
+  smsLogs     SmsLog[]
+
+  @@index([businessId])
+  @@index([createdAt])
+  @@map("calls")
+}
+
+// ─── Transcripts ──────────────────────────────────────────────────────────────
+// Stores the conversation transcript. Separated from calls because transcripts
+// can be large and may be offloaded to blob storage later.
+model Transcript {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  callId    String   @unique @map("call_id") @db.Uuid
+  rawText   String?  @map("raw_text")
+  segments  Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@map("transcripts")
+}
+
+// ─── Appointments ─────────────────────────────────────────────────────────────
+// Represents booked appointments (syncs with Google Calendar event ID).
+model Appointment {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId     String    @map("business_id") @db.Uuid
+  callId         String?   @map("call_id") @db.Uuid
+  googleEventId  String?   @map("google_event_id")
+  customerName   String    @map("customer_name")
+  customerPhone  String    @map("customer_phone")
+  serviceType    String    @map("service_type")
+  scheduledFor   DateTime  @map("scheduled_for") @db.Timestamptz(6)
+  notes          String?
+  status         String    @default("confirmed")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  callLink Call[]   @relation("CallAppointment")
+
+  @@index([businessId])
+  @@index([scheduledFor])
+  @@map("appointments")
+}
+
+// ─── OAuth Tokens ─────────────────────────────────────────────────────────────
+// Stores Google OAuth tokens for calendar access (encrypted in production).
+model OauthToken {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId   String    @map("business_id") @db.Uuid
+  provider     String
+  accessToken  String    @map("access_token")
+  refreshToken String?   @map("refresh_token")
+  expiry       DateTime? @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, provider])
+  @@map("oauth_tokens")
+}
+
+// ─── SMS Logs ─────────────────────────────────────────────────────────────────
+// Records SMS notifications sent to business owners.
+model SmsLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  callId     String?  @map("call_id") @db.Uuid
+  recipient  String
+  body       String?
+  status     String?
+  twilioSid  String?  @map("twilio_sid")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  call     Call?    @relation(fields: [callId], references: [id], onDelete: SetNull)
+
+  @@index([businessId])
+  @@map("sms_logs")
+}

@@ -45,7 +45,8 @@ const INTENT_LIST = [
   },
   {
     name: "greeting",
-    keywords: ["hello", "\\bhi\\b", "\\bhey\\b", "good morning", "good afternoon"],
+    keywords: ["hello", "good morning", "good afternoon"],
+    patterns: [/\bhi\b/i, /\bhey\b/i],
     response:
       "Hello! Thanks for calling CallGuard. How can I help you today? I can help you book an appointment, answer questions about our services, or connect you with our team.",
   },
@@ -72,14 +73,10 @@ INTENTS.fallback = { keywords: [], response: FALLBACK.response };
 function classifyIntent(text) {
   const lower = (text || "").toLowerCase();
 
-  for (const { name, keywords, response } of INTENT_LIST) {
-    const matched = keywords.some((kw) => {
-      if (kw.includes("\\b")) {
-        return new RegExp(kw, "i").test(lower);
-      }
-      return lower.includes(kw);
-    });
-    if (matched) {
+  for (const { name, keywords, patterns, response } of INTENT_LIST) {
+    const keywordMatch = keywords.some((kw) => lower.includes(kw));
+    const patternMatch = (patterns || []).some((re) => re.test(lower));
+    if (keywordMatch || patternMatch) {
       return { intent: name, response };
     }
   }
