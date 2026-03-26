@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
+const path = require("path");
 const cfg = require("./config");
 const twilioRoutes = require("./routes/twilio");
 const voiceRoutes = require("./routes/voice");
@@ -28,6 +29,33 @@ function createApp() {
 
   // Week 4 – Owner dashboard REST API
   app.use("/api/dashboard", dashboardRoutes);
+
+  // ── UI: serve the React frontend ──
+  // Vendor libraries from node_modules
+  const nodeModules = path.join(__dirname, "../node_modules");
+  app.get("/vendor/react.production.min.js", (_req, res) => {
+    res.sendFile(path.join(nodeModules, "react/umd/react.production.min.js"));
+  });
+  app.get("/vendor/react-dom.production.min.js", (_req, res) => {
+    res.sendFile(path.join(nodeModules, "react-dom/umd/react-dom.production.min.js"));
+  });
+  app.get("/vendor/babel.min.js", (_req, res) => {
+    res.sendFile(path.join(nodeModules, "@babel/standalone/babel.min.js"));
+  });
+
+  // Serve callguard-app.jsx from repo root so the HTML shell can load it
+  const repoRoot = path.resolve(__dirname, "../..");
+  app.get("/callguard-app.jsx", (_req, res) => {
+    res.type("text/babel").sendFile(path.join(repoRoot, "callguard-app.jsx"));
+  });
+
+  // Static files (index.html, api.js)
+  app.use(express.static(path.join(__dirname, "../public")));
+
+  // SPA fallback – serve index.html for any unmatched GET
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(__dirname, "../public/index.html"));
+  });
 
   return app;
 }

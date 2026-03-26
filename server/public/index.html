@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CallGuard – AI Receptionist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; }
+    body { background: #030508; color: #EEF2FF; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React 18 (local) -->
+  <script src="/vendor/react.production.min.js"></script>
+  <script src="/vendor/react-dom.production.min.js"></script>
+
+  <!-- Babel standalone for JSX in the browser -->
+  <script src="/vendor/babel.min.js"></script>
+
+  <!-- API client (non-module, sets window.CallGuardAPI / window.CallGuardSocket) -->
+  <script src="/api.js" type="text/babel" data-type="module"></script>
+
+  <!-- The main app component -->
+  <script type="text/babel" data-type="module">
+    // api.js is loaded above – grab from window globals
+    const api = window.CallGuardAPI;
+    const connectCallSocket = window.CallGuardSocket;
+  </script>
+  <script type="text/babel" src="/callguard-app.jsx" data-type="module"></script>
+
+  <!-- Mount -->
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    // Wait for the app module – Babel compiles them sequentially
+    function Boot() {
+      // The JSX file sets window.__CallGuardApp via side-effect (see patched export)
+      const AppComp = window.__CallGuardApp;
+      if (!AppComp) return React.createElement('div', {style:{color:'#7A8BA8',textAlign:'center',paddingTop:'40vh',fontFamily:'DM Sans'}}, 'Loading CallGuard…');
+      return React.createElement(AppComp);
+    }
+
+    // Small retry loop – Babel script compilation is async
+    function Root() {
+      const [ready, setReady] = React.useState(!!window.__CallGuardApp);
+      React.useEffect(() => {
+        if (ready) return;
+        const t = setInterval(() => { if (window.__CallGuardApp) { setReady(true); clearInterval(t); } }, 50);
+        return () => clearInterval(t);
+      }, [ready]);
+      return ready ? React.createElement(window.__CallGuardApp) : React.createElement(Boot);
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Root));
+  </script>
+</body>
+</html>

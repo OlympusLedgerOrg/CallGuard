@@ -1,4 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+/* global React */
+const { useState, useEffect, useCallback, useRef } = (typeof React !== "undefined") ? React : require("react");
+
+/* ── API helpers (set by /api.js when served from Express) ── */
+const api = (typeof window !== "undefined" && window.CallGuardAPI) || null;
+const connectCallSocket = (typeof window !== "undefined" && window.CallGuardSocket) || null;
 
 const C = {
   bg:"#07090F", surface:"#0E1219", card:"#131822", border:"#1B2840",
@@ -212,7 +217,7 @@ const QUICK_REPLIES=[
 ];
 
 /* ── LiveCallPanel ── */
-function LiveCallPanel({plat,live,onClose}){
+function LiveCallPanel({plat,live,liveTranscript,onClose}){
   const ios=plat==="ios"; const ff=ios?"'DM Sans',sans-serif":"'Roboto',sans-serif";
   const [mode,setMode]=useState("ai");     // ai | listen | owner | ended
   const [tab,setTab]=useState("info");     // info | controls
@@ -225,8 +230,18 @@ function LiveCallPanel({plat,live,onClose}){
   const [muted,setMuted]=useState(false);
   const txRef=useRef(null);
 
-  /* stream transcript lines in */
+  /* Use real WebSocket transcript when available, otherwise demo script */
+  const hasLiveTranscript = liveTranscript && liveTranscript.length > 0;
+
   useEffect(()=>{
+    if(hasLiveTranscript){
+      setMsgs(liveTranscript.map(t=>({from:t.role==="user"?"caller":"ai",text:t.text})));
+    }
+  },[liveTranscript,hasLiveTranscript]);
+
+  /* stream mock transcript lines in (only when no live data) */
+  useEffect(()=>{
+    if(hasLiveTranscript) return; // skip mock when we have real data
     if(mode==="ended") return;
     const delay=txIdx===0?400:2800;
     if(txIdx>=TX_SCRIPT.length) return;
@@ -235,7 +250,7 @@ function LiveCallPanel({plat,live,onClose}){
       setTxIdx(i=>i+1);
     },delay);
     return()=>clearTimeout(t);
-  },[txIdx,mode]);
+  },[txIdx,mode,hasLiveTranscript]);
 
   /* auto-scroll transcript */
   useEffect(()=>{
@@ -252,12 +267,18 @@ function LiveCallPanel({plat,live,onClose}){
   const sendInfo=(text)=>{
     if(!text.trim()) return;
     setSending(true);
-    setTimeout(()=>{
-      setSentMsgs(s=>[...s,{text:text.trim(),ts:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}]);
-      setSending(false);
-      setCustom("");
-      setTab("info");
-    },700);
+    const callerPhone = live && live.caller !== "David Kim" ? live.from : null;
+    if(api && callerPhone){
+      api.sendSms(callerPhone, text.trim()).then(()=>{
+        setSentMsgs(s=>[...s,{text:text.trim(),ts:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}]);
+        setSending(false);setCustom("");setTab("info");
+      }).catch(()=>{setSending(false);});
+    } else {
+      setTimeout(()=>{
+        setSentMsgs(s=>[...s,{text:text.trim(),ts:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}]);
+        setSending(false);setCustom("");setTab("info");
+      },700);
+    }
   };
 
   const handleJump=()=>{
@@ -447,7 +468,59 @@ function HomeScreen({plat,triggerNotif}){
   const ios=plat==="ios"; const ff=ios?"'DM Sans',sans-serif":"'Roboto',sans-serif";
   const [live,setLive]=useState(null);
   const [panelOpen,setPanelOpen]=useState(false);
-  useEffect(()=>{const t=setTimeout(()=>setLive({caller:"David Kim",s:0}),2400);return()=>clearTimeout(t);},[]);
+  const [liveTranscript,setLiveTranscript]=useState([]);
+
+  /* ── live stats & calls from API (fallback to mock) ── */
+  const [stats,setStats]=useState(STATS);
+  const [recentCalls,setRecentCalls]=useState(CALLS.slice(0,3));
+
+  useEffect(()=>{
+    if(!api) return;
+    api.getStats().then(d=>{
+      if(!d) return;
+      setStats([
+        {l:"Calls This Week",v:String(d.callsThisWeek),d:"live"},
+        {l:"AI Handled",v:d.aiHandledPct+"%",d:"live"},
+        {l:"Appts Booked",v:String(d.bookingsThisWeek),d:"live"},
+        {l:"Active Calls",v:String(d.activeCalls),d:"now"},
+      ]);
+    });
+    api.getCallLog(3).then(d=>{
+      if(!d||!d.length) return;
+      setRecentCalls(d.map((c,i)=>({id:c.callSid||i,caller:c.from||"Unknown",num:c.from||"",t:c.startedAt||"",dur:"",s:c.outcome||"handled",ai:true,sum:c.outcome||""})));
+    });
+  },[]);
+
+  /* ── WebSocket for live calls ── */
+  useEffect(()=>{
+    if(!connectCallSocket) {
+      // offline mock: simulate a live call
+      const t=setTimeout(()=>setLive({caller:"David Kim",s:0}),2400);
+      return()=>clearTimeout(t);
+    }
+    const close=connectCallSocket({
+      onSnapshot(d){
+        if(d.activeCalls&&d.activeCalls.length){
+          const c=d.activeCalls[0];
+          setLive({caller:c.from||"Incoming",s:0,callSid:c.callSid});
+          setLiveTranscript(c.transcript||[]);
+        }
+      },
+      onCallStart(d){
+        setLive({caller:d.from||"Incoming",s:0,callSid:d.callSid});
+        setLiveTranscript([]);
+      },
+      onTranscript(d){
+        setLiveTranscript(prev=>[...prev,d.turn]);
+      },
+      onCallEnd(){
+        setLive(null);
+        setLiveTranscript([]);
+      },
+    });
+    return close;
+  },[]);
+
   useEffect(()=>{if(!live)return;const t=setInterval(()=>setLive(c=>c?{...c,s:c.s+1}:null),1000);return()=>clearInterval(t);},[!!live]);
   const fmt=s=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
   const br=ios?16:10;
@@ -511,11 +584,11 @@ function HomeScreen({plat,triggerNotif}){
 
       {/* Live call panel overlay */}
       {panelOpen&&live&&(
-        <LiveCallPanel plat={plat} live={{...live,fmt:fmt(live.s)}} onClose={()=>setPanelOpen(false)}/>
+        <LiveCallPanel plat={plat} live={{...live,fmt:fmt(live.s)}} liveTranscript={liveTranscript} onClose={()=>setPanelOpen(false)}/>
       )}
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-        {STATS.map((s,i)=>(
+        {stats.map((s,i)=>(
           <div key={i} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:br,padding:"12px 14px"}}>
             <div style={{fontSize:11,color:C.muted,marginBottom:5}}>{s.l}</div>
             <div style={{fontSize:19,fontWeight:600,letterSpacing:"-.5px",marginBottom:3}}>{s.v}</div>
@@ -525,7 +598,7 @@ function HomeScreen({plat,triggerNotif}){
       </div>
 
       <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",marginBottom:10}}>RECENT CALLS</div>
-      {CALLS.slice(0,3).map(c=>(
+      {recentCalls.map(c=>(
         <div key={c.id} className="ch" style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:br,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div style={{flex:1,minWidth:0,paddingRight:8}}>
             <div style={{fontSize:14,fontWeight:500,marginBottom:2}}>{c.caller}</div>
@@ -549,7 +622,28 @@ function CallsScreen({plat}){
   const ios=plat==="ios"; const ff=ios?"'DM Sans',sans-serif":"'Roboto',sans-serif";
   const [open,setOpen]=useState(null);
   const [fil,setFil]=useState("All");
-  const filtered=CALLS.filter(c=>fil==="All"||(fil==="AI"&&c.ai)||(fil==="Booked"&&c.s==="booked")||(fil==="Missed"&&c.s==="missed"));
+  const [calls,setCalls]=useState(CALLS);
+
+  /* Fetch call log from API when available */
+  useEffect(()=>{
+    if(!api) return;
+    api.getCallLog(50).then(d=>{
+      if(!d||!d.length) return;
+      setCalls(d.map((c,i)=>({
+        id:c.callSid||i,
+        caller:c.from||"Unknown",
+        num:c.from||"",
+        t:c.startedAt?new Date(c.startedAt).toLocaleString():"",
+        dur:c.endedAt?Math.round((new Date(c.endedAt)-new Date(c.startedAt))/1000)+"s":"",
+        s:c.outcome||"handled",
+        ai:c.outcome!=="transferred",
+        sum:c.outcome||"",
+        tx:(c.transcript||[]).map(t=>`[${t.role==="assistant"?"AI":"Caller"}: ${t.text}]`).join("\n"),
+      })));
+    });
+  },[]);
+
+  const filtered=calls.filter(c=>fil==="All"||(fil==="AI"&&c.ai)||(fil==="Booked"&&c.s==="booked")||(fil==="Missed"&&c.s==="missed"));
   return(
     <div style={{height:"100%",color:C.text,fontFamily:ff,display:"flex",flexDirection:"column",animation:"slideUp .28s cubic-bezier(.22,1,.36,1) both"}}>
       <div style={{padding:"14px 16px 10px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
@@ -615,7 +709,22 @@ function BookScreen({plat,onBooked}){
 
   const confirm=()=>{
     setLoading(true);
-    setTimeout(()=>{setLoading(false);setStep(3);onBooked({svc,day,time,name});},1900);
+    if(api && ph){
+      api.createBooking({
+        service: svc?.name||"Appointment",
+        date: day?.dt||"",
+        time: time||"",
+        customerName: name||"Customer",
+        customerPhone: ph,
+      }).then(()=>{
+        setLoading(false);setStep(3);onBooked({svc,day,time,name});
+      }).catch(()=>{
+        // Fall back to offline behavior on error
+        setTimeout(()=>{setLoading(false);setStep(3);onBooked({svc,day,time,name});},500);
+      });
+    } else {
+      setTimeout(()=>{setLoading(false);setStep(3);onBooked({svc,day,time,name});},1900);
+    }
   };
   const reset=()=>{setStep(0);setSvc(null);setDay(null);setTime(null);setName("");setPh("");setNote("");};
 
@@ -1206,7 +1315,7 @@ function detectOS(){
 }
 
 /* ── ROOT ── */
-export default function App(){
+function App(){
   const [detected]=useState(()=>detectOS());
   const [plat,setPlat]=useState(()=>detectOS().os);
   const [manualOverride,setManualOverride]=useState(false);
@@ -1300,3 +1409,7 @@ export default function App(){
     </>
   );
 }
+
+/* Register globally so index.html can mount it, and also support module import */
+if (typeof window !== "undefined") { window.__CallGuardApp = App; }
+if (typeof module !== "undefined") { module.exports = App; }
