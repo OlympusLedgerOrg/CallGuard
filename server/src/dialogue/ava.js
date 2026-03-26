@@ -88,7 +88,6 @@ function r(strings) {
 
 // ── TwiML helpers ────────────────────────────────────────────────
 // These produce the speech text Twilio will say.
-// In production, wrap in <Say voice="Polly.Joanna"> or ElevenLabs stream.
 
 function say(text) {
   return { type: "say", text: text.trim() };
@@ -104,7 +103,7 @@ function hangup(text) {
 }
 
 // ── Main dialogue step processor ────────────────────────────────
-export function processInput(callSid, rawText, bizConfig) {
+function processInput(callSid, rawText, bizConfig) {
   const text = (rawText || "").trim();
 
   // Get or create session
@@ -448,12 +447,14 @@ function capitalise(str) {
 }
 
 // ── Session cleanup ───────────────────────────────────────────────
-export function endSession(callSid) {
+function endSession(callSid) {
   const session = sessions.get(callSid);
   sessions.delete(callSid);
   return session;
 }
 
-export function getSession(callSid) {
+function getSession(callSid) {
   return sessions.get(callSid);
 }
+
+module.exports = { processInput, endSession, getSession, GATES, matchIntent };

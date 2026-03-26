@@ -158,19 +158,50 @@ eas submit --platform android      # upload to Google Play Console
                WebSocket /ws     ◄── Live call stream  (Week 4)
 ```
 
+### Ava Dialogue Engine
+
+The Ava engine adds a production-grade call flow with a stateful gate-based dialogue system:
+
+```
+Caller dials your Twilio number
+        ↓
+POST /ava/voice/inbound
+  → create calls + transcripts in DB
+  → Ava greets caller (TwiML Gather)
+        ↓
+Caller speaks → Twilio STT → POST /ava/voice/input
+  → Ava.processInput() classifies intent (regex, no LLM)
+  → routes through gate (TRIAGE → LOGISTICS → OFFER → CAPTURE)
+  → returns next TwiML
+  → pushes transcript line to WebSocket
+        ↓
+... turns repeat until CONFIRMED / LEAD / CALLBACK / EMERGENCY ...
+        ↓
+Call ends → POST /ava/voice/status
+  → creates job_request in DB
+  → if booked: creates appointment + sends customer SMS confirmation
+  → if missed/lead: sends owner alert SMS
+  → closes session
+```
+
+Configure Twilio webhooks for the Ava engine:
+- **Incoming call (Voice):** `POST https://your-url/ava/voice/inbound`
+- **Call status callback:** `POST https://your-url/ava/voice/status`
+
 ## Database Schema
 
-The database is designed around 7 core tables:
+The database is designed around 8 core tables:
 
 | Table | Purpose |
 |---|---|
-| `businesses` | Business owner accounts and configuration |
+| `businesses` | Business owner accounts, AI config, and settings |
 | `twilio_numbers` | Twilio phone numbers linked to businesses |
-| `calls` | One row per inbound call (core call log) |
-| `transcripts` | Full conversation transcripts (separated for scale) |
+| `calls` | One row per inbound call (disposition, AI handled, owner joined) |
+| `transcripts` | Full conversation transcripts as JSON lines |
+| `job_requests` | HVAC / mechanic job requests (issue, urgency, disposition) |
 | `appointments` | Booked appointments (synced with Google Calendar) |
 | `oauth_tokens` | Google OAuth tokens for calendar access |
-| `sms_logs` | Audit log for SMS notifications to owners |
+| `sms_logs` | Audit log for all SMS (booking confirm, missed call, owner alert) |
 
 ## Tech Stack
 
@@ -178,6 +209,7 @@ The database is designed around 7 core tables:
 - **ORM**: [Prisma](https://www.prisma.io/)
 - **Database**: PostgreSQL (Supabase / Neon / self-hosted)
 - **Voice**: Twilio + OpenAI Realtime API
+- **Dialogue**: Ava — local rule engine, regex intent matching, no LLM (zero per-call cost)
 - **Calendar**: Google Calendar API
 - **Mobile**: [Expo](https://expo.dev) (React Native) – iOS & Android
 
@@ -187,6 +219,8 @@ The database is designed around 7 core tables:
 - **PostgreSQL** — local, [Supabase](https://supabase.com/), [Neon](https://neon.tech/), or via Docker Compose (included)
 
 ## API Endpoints
+
+### Original Routes
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -204,7 +238,31 @@ The database is designed around 7 core tables:
 | GET | `/api/dashboard/calls/active` | Active calls |
 | GET | `/api/dashboard/calls/log` | Recent call log |
 | POST | `/api/dashboard/sms` | Send SMS from dashboard |
-| WS | `/ws` | Real-time call events |
+
+### Ava Engine Routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/ava/voice/inbound` | New call arrives — starts Ava session |
+| POST | `/ava/voice/input` | Caller spoke — STT result → Ava → TwiML |
+| POST | `/ava/voice/fallback` | No speech detected — re-prompt |
+| POST | `/ava/voice/status` | Call lifecycle (completed, missed, failed) |
+| GET | `/ava/api/health` | Server health check |
+| GET | `/ava/api/stats?businessId=` | Home screen KPIs (calls, AI rate, bookings) |
+| GET | `/ava/api/calls?businessId=` | Call history with transcript summaries |
+| GET | `/ava/api/calls/:id/transcript` | Full transcript lines for one call |
+| GET | `/ava/api/jobs?businessId=` | Job requests (new, scheduled, lead) |
+| GET | `/ava/api/appointments?businessId=` | Upcoming appointments |
+| POST | `/ava/api/appointments` | Manual booking from the app |
+| POST | `/ava/api/calls/:callSid/sms` | Send mid-call info SMS to caller |
+| POST | `/ava/api/jobs/:id/follow-up` | Send follow-up SMS to a lead |
+
+### WebSocket
+
+| Path | Description |
+|------|-------------|
+| WS `/ws` | Real-time call events (original) |
+| WS `/ws?callSid=X&role=owner` | Ava live call room (transcript streaming, take-over, mid-call SMS) |
 
 ## Data Flow
 
@@ -233,3 +291,25 @@ npm test
 - [x] **Week 3** – Booking flow + Google Calendar + SMS confirmation
 - [x] **Week 4** – Owner dashboard API + WebSocket for live calls
 - [x] **Week 5** – Mobile app for iOS & Android (Expo)
+- [x] **Week 6** – Ava dialogue engine (gate-based state machine, job requests, SMS templates, live call WebSocket)
+
+## Adding a New Business Type
+
+1. Add a config object in `config/businesses.js`
+2. Set `business_type` on the `businesses` table row
+3. Add any new intent patterns in `server/src/dialogue/ava.js` → `INTENTS`
+4. Ava reads the config at call start — no code changes needed per customer
+
+## Cost at Zero Customers
+
+| Service | Cost |
+|---|---|
+| Twilio phone number | $1/month |
+| Twilio per-minute (inbound) | $0.013/min |
+| Twilio SMS | $0.0079/message |
+| Railway (DB + server) | $5/month |
+| STT (Twilio Enhanced) | included |
+| TTS (Polly via Twilio) | included |
+| **Total fixed** | **~$6/month** |
+
+Scales with call volume — no flat LLM API bill.
