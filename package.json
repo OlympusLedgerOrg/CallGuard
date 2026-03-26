@@ -4,6 +4,10 @@
   "description": "AI-powered voice receptionist for local service businesses",
   "main": "src/index.js",
   "scripts": {
+    "setup": "bash setup.sh",
+    "start": "node server/src/index.js",
+    "dev": "node --watch server/src/index.js",
+    "test": "cd server && npm test",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:generate": "prisma generate",

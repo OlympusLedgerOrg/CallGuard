@@ -1,0 +1,43 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# CallGuard – Docker Compose
+#
+# Quick start:
+#   1. cp .env.example .env          → set your API keys
+#   2. cp server/.env.example server/.env → set Twilio / Google / OpenAI keys
+#   3. docker compose up
+# ──────────────────────────────────────────────────────────────────────────────
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: callguard
+      POSTGRES_PASSWORD: callguard
+      POSTGRES_DB: callguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U callguard"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://callguard:callguard@db:5432/callguard?schema=public"
+      NODE_ENV: production
+      PORT: 3000
+    env_file:
+      - server/.env
+
+volumes:
+  pgdata:

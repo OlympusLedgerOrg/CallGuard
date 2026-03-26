@@ -2,9 +2,145 @@
 
 AI-powered voice receptionist for local service businesses — built on Twilio, OpenAI, and PostgreSQL.
 
-## Overview
+## Quick Start
 
-CallGuard handles inbound calls for local service businesses (plumbers, electricians, HVAC, etc.), qualifies leads, books appointments, and sends SMS summaries to the business owner — all automatically.
+### Option A: Automated Setup (recommended)
+
+```bash
+git clone https://github.com/wombatvagina69-crypto/CallGuard.git
+cd CallGuard
+./setup.sh
+```
+
+The setup script installs all dependencies, creates `.env` files from templates, and runs database migrations when a valid `DATABASE_URL` is configured. After setup, edit the env files with your credentials and start the server:
+
+```bash
+npm start              # → http://localhost:3000
+```
+
+### Option B: Docker (includes PostgreSQL)
+
+```bash
+git clone https://github.com/wombatvagina69-crypto/CallGuard.git
+cd CallGuard
+cp server/.env.example server/.env   # add your Twilio / Google / OpenAI keys
+docker compose up                    # → http://localhost:3000
+```
+
+Docker Compose starts a PostgreSQL database and the CallGuard server together. No local Node.js or database install needed.
+
+### Option C: Manual Setup
+
+```bash
+git clone https://github.com/wombatvagina69-crypto/CallGuard.git
+cd CallGuard
+npm install                          # root deps (Prisma)
+cp .env.example .env                 # set DATABASE_URL
+npm run db:migrate                   # create tables
+npm run db:generate                  # generate Prisma client
+cd server
+npm install                          # server deps
+cp .env.example .env                 # add API keys
+npm start                            # → http://localhost:3000
+```
+
+### Environment Variables
+
+| File | Variable | Description |
+|------|----------|-------------|
+| `.env` | `DATABASE_URL` | PostgreSQL connection string |
+| `.env` | `NODE_ENV` | `development` or `production` |
+| `server/.env` | `TWILIO_ACCOUNT_SID` | Twilio account SID |
+| `server/.env` | `TWILIO_AUTH_TOKEN` | Twilio auth token |
+| `server/.env` | `TWILIO_PHONE_NUMBER` | Your Twilio phone number |
+| `server/.env` | `GOOGLE_CLIENT_EMAIL` | Google service account email |
+| `server/.env` | `GOOGLE_PRIVATE_KEY` | Google service account private key |
+| `server/.env` | `GOOGLE_CALENDAR_ID` | Google Calendar ID (default: `primary`) |
+| `server/.env` | `OPENAI_API_KEY` | OpenAI API key |
+| `server/.env` | `PORT` | Server port (default: `3000`) |
+| `server/.env` | `BASE_URL` | Public URL for Twilio webhooks (e.g. ngrok) |
+
+### Exposing for Twilio Webhooks
+
+CallGuard must be publicly reachable for Twilio to send webhooks. The simplest way in development:
+
+```bash
+npx ngrok http 3000
+# Copy the https:// URL and set it as BASE_URL in server/.env
+# Configure your Twilio number's voice webhook to: https://<ngrok-url>/twilio/voice
+```
+
+### NPM Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run setup` | Run the automated setup wizard |
+| `npm start` | Start the server |
+| `npm run dev` | Start with hot-reload (watch mode) |
+| `npm test` | Run the test suite |
+| `npm run db:migrate` | Run database migrations |
+| `npm run db:migrate:dev` | Run migrations in dev mode |
+| `npm run db:generate` | Regenerate Prisma client |
+| `npm run db:studio` | Open Prisma Studio (visual DB browser) |
+| `npm run db:reset` | Drop and recreate the database (dev only) |
+
+## Mobile App (iOS & Android)
+
+The `mobile/` directory contains an [Expo](https://expo.dev) React Native app that wraps the CallGuard dashboard as a native iOS and Android application. It adds push notifications for incoming calls, native splash screen, and proper app store distribution.
+
+### Quick Start
+
+```bash
+cd mobile
+npm install
+npx expo start          # opens Expo dev tools
+```
+
+Scan the QR code with **Expo Go** ([iOS](https://apps.apple.com/app/expo-go/id982107779) / [Android](https://play.google.com/store/apps/details?id=host.exp.exponent)) to run the app on your phone.
+
+> **Note:** Set your server URL in `mobile/src/config.js` to your machine's LAN IP (e.g. `http://192.168.1.42:3000`) so the phone can reach the backend over your local network.
+
+### Build for App Stores
+
+CallGuard uses [EAS Build](https://docs.expo.dev/build/introduction/) to create production binaries:
+
+```bash
+cd mobile
+npm install -g eas-cli
+eas login                          # sign in to your Expo account
+eas build --platform ios           # → .ipa for App Store
+eas build --platform android       # → .aab for Google Play
+```
+
+Configure store credentials in `mobile/eas.json` before submitting. For iOS, you need your Apple ID, [App Store Connect](https://appstoreconnect.apple.com/) app ID, and team ID. For Android, create a [Google Play service account](https://docs.expo.dev/submit/android/) JSON key.
+
+```bash
+eas submit --platform ios          # upload to App Store Connect
+eas submit --platform android      # upload to Google Play Console
+```
+
+### Mobile Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npx expo start` | Start Expo dev server |
+| `npx expo start --ios` | Launch in iOS Simulator |
+| `npx expo start --android` | Launch in Android Emulator |
+| `npm run build:ios` | Build iOS binary via EAS |
+| `npm run build:android` | Build Android binary via EAS |
+| `npm run build:all` | Build both platforms |
+| `npm run submit:ios` | Submit to App Store Connect |
+| `npm run submit:android` | Submit to Google Play Console |
+
+### Features
+
+- **WebView shell** – wraps the full CallGuard web dashboard natively
+- **Push notifications** – native alerts for incoming calls
+- **Android back button** – navigates within the app
+- **Dark theme** – matches the web UI's dark palette
+- **Error recovery** – shows a retry screen when the server is unreachable
+- **Deep linking** – notification taps open the relevant screen
+- **Splash screen** – native splash while the app loads
 
 ## Architecture
 
@@ -22,19 +158,50 @@ CallGuard handles inbound calls for local service businesses (plumbers, electric
                WebSocket /ws     ◄── Live call stream  (Week 4)
 ```
 
+### Ava Dialogue Engine
+
+The Ava engine adds a production-grade call flow with a stateful gate-based dialogue system:
+
+```
+Caller dials your Twilio number
+        ↓
+POST /ava/voice/inbound
+  → create calls + transcripts in DB
+  → Ava greets caller (TwiML Gather)
+        ↓
+Caller speaks → Twilio STT → POST /ava/voice/input
+  → Ava.processInput() classifies intent (regex, no LLM)
+  → routes through gate (TRIAGE → LOGISTICS → OFFER → CAPTURE)
+  → returns next TwiML
+  → pushes transcript line to WebSocket
+        ↓
+... turns repeat until CONFIRMED / LEAD / CALLBACK / EMERGENCY ...
+        ↓
+Call ends → POST /ava/voice/status
+  → creates job_request in DB
+  → if booked: creates appointment + sends customer SMS confirmation
+  → if missed/lead: sends owner alert SMS
+  → closes session
+```
+
+Configure Twilio webhooks for the Ava engine:
+- **Incoming call (Voice):** `POST https://your-url/ava/voice/inbound`
+- **Call status callback:** `POST https://your-url/ava/voice/status`
+
 ## Database Schema
 
-The database is designed around 7 core tables:
+The database is designed around 8 core tables:
 
 | Table | Purpose |
 |---|---|
-| `businesses` | Business owner accounts and configuration |
+| `businesses` | Business owner accounts, AI config, and settings |
 | `twilio_numbers` | Twilio phone numbers linked to businesses |
-| `calls` | One row per inbound call (core call log) |
-| `transcripts` | Full conversation transcripts (separated for scale) |
+| `calls` | One row per inbound call (disposition, AI handled, owner joined) |
+| `transcripts` | Full conversation transcripts as JSON lines |
+| `job_requests` | HVAC / mechanic job requests (issue, urgency, disposition) |
 | `appointments` | Booked appointments (synced with Google Calendar) |
 | `oauth_tokens` | Google OAuth tokens for calendar access |
-| `sms_logs` | Audit log for SMS notifications to owners |
+| `sms_logs` | Audit log for all SMS (booking confirm, missed call, owner alert) |
 
 ## Tech Stack
 
@@ -42,56 +209,18 @@ The database is designed around 7 core tables:
 - **ORM**: [Prisma](https://www.prisma.io/)
 - **Database**: PostgreSQL (Supabase / Neon / self-hosted)
 - **Voice**: Twilio + OpenAI Realtime API
+- **Dialogue**: Ava — local rule engine, regex intent matching, no LLM (zero per-call cost)
 - **Calendar**: Google Calendar API
+- **Mobile**: [Expo](https://expo.dev) (React Native) – iOS & Android
 
-## Getting Started
+## Prerequisites
 
-### Prerequisites
-
-- Node.js 18+
-- PostgreSQL instance (local, [Supabase](https://supabase.com/), or [Neon](https://neon.tech/))
-
-### Setup
-
-1. **Clone and install dependencies**
-
-   ```bash
-   git clone https://github.com/wombatvagina69-crypto/CallGuard.git
-   cd CallGuard
-   npm install
-   ```
-
-2. **Configure environment**
-
-   ```bash
-   cp .env.example .env
-   # Edit .env and set DATABASE_URL to your PostgreSQL connection string
-   ```
-
-3. **Run database migrations**
-
-   ```bash
-   npm run db:migrate
-   ```
-
-4. **Generate Prisma client**
-
-   ```bash
-   npm run db:generate
-   ```
-
-### Server (Twilio + API)
-
-```bash
-cd server
-cp .env.example .env   # fill in your Twilio & Google creds
-npm install
-npm start              # http://localhost:3000
-```
-
-Expose the server with ngrok and point your Twilio number's voice webhook at `https://<ngrok>.ngrok.io/twilio/voice`.
+- **Node.js 18+** — [Download](https://nodejs.org)
+- **PostgreSQL** — local, [Supabase](https://supabase.com/), [Neon](https://neon.tech/), or via Docker Compose (included)
 
 ## API Endpoints
+
+### Original Routes
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -109,7 +238,31 @@ Expose the server with ngrok and point your Twilio number's voice webhook at `ht
 | GET | `/api/dashboard/calls/active` | Active calls |
 | GET | `/api/dashboard/calls/log` | Recent call log |
 | POST | `/api/dashboard/sms` | Send SMS from dashboard |
-| WS | `/ws` | Real-time call events |
+
+### Ava Engine Routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/ava/voice/inbound` | New call arrives — starts Ava session |
+| POST | `/ava/voice/input` | Caller spoke — STT result → Ava → TwiML |
+| POST | `/ava/voice/fallback` | No speech detected — re-prompt |
+| POST | `/ava/voice/status` | Call lifecycle (completed, missed, failed) |
+| GET | `/ava/api/health` | Server health check |
+| GET | `/ava/api/stats?businessId=` | Home screen KPIs (calls, AI rate, bookings) |
+| GET | `/ava/api/calls?businessId=` | Call history with transcript summaries |
+| GET | `/ava/api/calls/:id/transcript` | Full transcript lines for one call |
+| GET | `/ava/api/jobs?businessId=` | Job requests (new, scheduled, lead) |
+| GET | `/ava/api/appointments?businessId=` | Upcoming appointments |
+| POST | `/ava/api/appointments` | Manual booking from the app |
+| POST | `/ava/api/calls/:callSid/sms` | Send mid-call info SMS to caller |
+| POST | `/ava/api/jobs/:id/follow-up` | Send follow-up SMS to a lead |
+
+### WebSocket
+
+| Path | Description |
+|------|-------------|
+| WS `/ws` | Real-time call events (original) |
+| WS `/ws?callSid=X&role=owner` | Ava live call room (transcript streaming, take-over, mid-call SMS) |
 
 ## Data Flow
 
@@ -128,19 +281,8 @@ Expose the server with ngrok and point your Twilio number's voice webhook at `ht
 ## Tests
 
 ```bash
-cd server
 npm test
 ```
-
-## Development Scripts
-
-| Command | Description |
-|---|---|
-| `npm run db:migrate` | Run migrations in production |
-| `npm run db:migrate:dev` | Run migrations in development (creates new migration if schema changed) |
-| `npm run db:generate` | Regenerate the Prisma client |
-| `npm run db:studio` | Open Prisma Studio (visual database browser) |
-| `npm run db:reset` | Drop and recreate the database (dev only) |
 
 ## Milestones
 
@@ -148,3 +290,26 @@ npm test
 - [x] **Week 2** – STT + dialogue engine + TTS round trip
 - [x] **Week 3** – Booking flow + Google Calendar + SMS confirmation
 - [x] **Week 4** – Owner dashboard API + WebSocket for live calls
+- [x] **Week 5** – Mobile app for iOS & Android (Expo)
+- [x] **Week 6** – Ava dialogue engine (gate-based state machine, job requests, SMS templates, live call WebSocket)
+
+## Adding a New Business Type
+
+1. Add a config object in `config/businesses.js`
+2. Set `business_type` on the `businesses` table row
+3. Add any new intent patterns in `server/src/dialogue/ava.js` → `INTENTS`
+4. Ava reads the config at call start — no code changes needed per customer
+
+## Cost at Zero Customers
+
+| Service | Cost |
+|---|---|
+| Twilio phone number | $1/month |
+| Twilio per-minute (inbound) | $0.013/min |
+| Twilio SMS | $0.0079/message |
+| Railway (DB + server) | $5/month |
+| STT (Twilio Enhanced) | included |
+| TTS (Polly via Twilio) | included |
+| **Total fixed** | **~$6/month** |
+
+Scales with call volume — no flat LLM API bill.

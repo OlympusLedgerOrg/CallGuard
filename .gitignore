@@ -5,3 +5,9 @@ coverage/
 *.log
 .DS_Store
 /generated/prisma
+
+# Mobile (Expo)
+mobile/.expo/
+mobile/ios/
+mobile/android/
+mobile/web-build/
