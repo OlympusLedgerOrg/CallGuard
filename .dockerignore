@@ -1,0 +1,10 @@
+node_modules
+server/node_modules
+.git
+.env
+server/.env
+coverage
+dist
+*.log
+.DS_Store
+generated/prisma

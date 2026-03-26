@@ -2,9 +2,87 @@
 
 AI-powered voice receptionist for local service businesses — built on Twilio, OpenAI, and PostgreSQL.
 
-## Overview
+## Quick Start
 
-CallGuard handles inbound calls for local service businesses (plumbers, electricians, HVAC, etc.), qualifies leads, books appointments, and sends SMS summaries to the business owner — all automatically.
+### Option A: Automated Setup (recommended)
+
+```bash
+git clone https://github.com/wombatvagina69-crypto/CallGuard.git
+cd CallGuard
+./setup.sh
+```
+
+The setup script installs all dependencies, creates `.env` files from templates, and runs database migrations when a valid `DATABASE_URL` is configured. After setup, edit the env files with your credentials and start the server:
+
+```bash
+npm start              # → http://localhost:3000
+```
+
+### Option B: Docker (includes PostgreSQL)
+
+```bash
+git clone https://github.com/wombatvagina69-crypto/CallGuard.git
+cd CallGuard
+cp server/.env.example server/.env   # add your Twilio / Google / OpenAI keys
+docker compose up                    # → http://localhost:3000
+```
+
+Docker Compose starts a PostgreSQL database and the CallGuard server together. No local Node.js or database install needed.
+
+### Option C: Manual Setup
+
+```bash
+git clone https://github.com/wombatvagina69-crypto/CallGuard.git
+cd CallGuard
+npm install                          # root deps (Prisma)
+cp .env.example .env                 # set DATABASE_URL
+npm run db:migrate                   # create tables
+npm run db:generate                  # generate Prisma client
+cd server
+npm install                          # server deps
+cp .env.example .env                 # add API keys
+npm start                            # → http://localhost:3000
+```
+
+### Environment Variables
+
+| File | Variable | Description |
+|------|----------|-------------|
+| `.env` | `DATABASE_URL` | PostgreSQL connection string |
+| `.env` | `NODE_ENV` | `development` or `production` |
+| `server/.env` | `TWILIO_ACCOUNT_SID` | Twilio account SID |
+| `server/.env` | `TWILIO_AUTH_TOKEN` | Twilio auth token |
+| `server/.env` | `TWILIO_PHONE_NUMBER` | Your Twilio phone number |
+| `server/.env` | `GOOGLE_CLIENT_EMAIL` | Google service account email |
+| `server/.env` | `GOOGLE_PRIVATE_KEY` | Google service account private key |
+| `server/.env` | `GOOGLE_CALENDAR_ID` | Google Calendar ID (default: `primary`) |
+| `server/.env` | `OPENAI_API_KEY` | OpenAI API key |
+| `server/.env` | `PORT` | Server port (default: `3000`) |
+| `server/.env` | `BASE_URL` | Public URL for Twilio webhooks (e.g. ngrok) |
+
+### Exposing for Twilio Webhooks
+
+CallGuard must be publicly reachable for Twilio to send webhooks. The simplest way in development:
+
+```bash
+npx ngrok http 3000
+# Copy the https:// URL and set it as BASE_URL in server/.env
+# Configure your Twilio number's voice webhook to: https://<ngrok-url>/twilio/voice
+```
+
+### NPM Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run setup` | Run the automated setup wizard |
+| `npm start` | Start the server |
+| `npm run dev` | Start with hot-reload (watch mode) |
+| `npm test` | Run the test suite |
+| `npm run db:migrate` | Run database migrations |
+| `npm run db:migrate:dev` | Run migrations in dev mode |
+| `npm run db:generate` | Regenerate Prisma client |
+| `npm run db:studio` | Open Prisma Studio (visual DB browser) |
+| `npm run db:reset` | Drop and recreate the database (dev only) |
 
 ## Architecture
 
@@ -44,52 +122,10 @@ The database is designed around 7 core tables:
 - **Voice**: Twilio + OpenAI Realtime API
 - **Calendar**: Google Calendar API
 
-## Getting Started
+## Prerequisites
 
-### Prerequisites
-
-- Node.js 18+
-- PostgreSQL instance (local, [Supabase](https://supabase.com/), or [Neon](https://neon.tech/))
-
-### Setup
-
-1. **Clone and install dependencies**
-
-   ```bash
-   git clone https://github.com/wombatvagina69-crypto/CallGuard.git
-   cd CallGuard
-   npm install
-   ```
-
-2. **Configure environment**
-
-   ```bash
-   cp .env.example .env
-   # Edit .env and set DATABASE_URL to your PostgreSQL connection string
-   ```
-
-3. **Run database migrations**
-
-   ```bash
-   npm run db:migrate
-   ```
-
-4. **Generate Prisma client**
-
-   ```bash
-   npm run db:generate
-   ```
-
-### Server (Twilio + API)
-
-```bash
-cd server
-cp .env.example .env   # fill in your Twilio & Google creds
-npm install
-npm start              # http://localhost:3000
-```
-
-Expose the server with ngrok and point your Twilio number's voice webhook at `https://<ngrok>.ngrok.io/twilio/voice`.
+- **Node.js 18+** — [Download](https://nodejs.org)
+- **PostgreSQL** — local, [Supabase](https://supabase.com/), [Neon](https://neon.tech/), or via Docker Compose (included)
 
 ## API Endpoints
 
@@ -128,19 +164,8 @@ Expose the server with ngrok and point your Twilio number's voice webhook at `ht
 ## Tests
 
 ```bash
-cd server
 npm test
 ```
-
-## Development Scripts
-
-| Command | Description |
-|---|---|
-| `npm run db:migrate` | Run migrations in production |
-| `npm run db:migrate:dev` | Run migrations in development (creates new migration if schema changed) |
-| `npm run db:generate` | Regenerate the Prisma client |
-| `npm run db:studio` | Open Prisma Studio (visual database browser) |
-| `npm run db:reset` | Drop and recreate the database (dev only) |
 
 ## Milestones
 
