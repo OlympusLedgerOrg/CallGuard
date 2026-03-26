@@ -42,6 +42,19 @@ const api = {
   getAvailability: (date) => json("GET", `/booking/availability?date=${date}`),
   createBooking:   (data) => json("POST", "/booking/create", data),
 
+  /* ── Test My AI ── */
+  testCall:      (sessionId, text, businessType) => json("POST", "/ava/api/test-call", { sessionId, text, businessType }),
+  endTestCall:   (sessionId)                     => json("DELETE", `/ava/api/test-call/${sessionId}`),
+
+  /* ── Script Wizard ── */
+  getScripts:    (businessId)          => json("GET", `/ava/api/scripts?businessId=${businessId}`),
+  updateScripts: (businessId, scripts) => json("PUT", "/ava/api/scripts", { businessId, scripts }),
+
+  /* ── Call Me Back Queue ── */
+  getCallbacks:    (businessId, status) => json("GET", `/ava/api/callbacks?businessId=${businessId}${status ? `&status=${status}` : ""}`),
+  createCallback:  (data)              => json("POST", "/ava/api/callbacks", data),
+  updateCallback:  (id, data)          => json("PATCH", `/ava/api/callbacks/${id}`, data),
+
   /* ── Health ── */
   health: () => json("GET", "/health"),
 };

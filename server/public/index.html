@@ -58,5 +58,14 @@
 
     ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Root));
   </script>
+
+  <!-- ⭐ Offline Mode: register service worker for app caching -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').catch(function() {});
+      });
+    }
+  </script>
 </body>
 </html>
