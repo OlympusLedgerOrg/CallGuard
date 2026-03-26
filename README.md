@@ -112,7 +112,7 @@ eas build --platform ios           # → .ipa for App Store
 eas build --platform android       # → .aab for Google Play
 ```
 
-Configure store credentials in `mobile/eas.json` before submitting:
+Configure store credentials in `mobile/eas.json` before submitting. For iOS, you need your Apple ID, [App Store Connect](https://appstoreconnect.apple.com/) app ID, and team ID. For Android, create a [Google Play service account](https://docs.expo.dev/submit/android/) JSON key.
 
 ```bash
 eas submit --platform ios          # upload to App Store Connect
