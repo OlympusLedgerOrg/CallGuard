@@ -34,6 +34,7 @@ model Business {
   appointments  Appointment[]
   oauthTokens   OauthToken[]
   smsLogs       SmsLog[]
+  callbackRequests CallbackRequest[]
 
   @@map("businesses")
 }
@@ -154,4 +155,26 @@ model SmsLog {
 
   @@index([businessId])
   @@map("sms_logs")
+}
+
+// ─── Callback Requests ────────────────────────────────────────────────────────
+// Call Me Back queue — captures unresolved calls so the owner can tap-to-callback.
+model CallbackRequest {
+  id             String    @id @default(uuid())
+  businessId     String    @map("business_id")
+  callId         String?   @map("call_id")
+  callerName     String?   @map("caller_name")
+  callerPhone    String    @map("caller_phone")
+  reason         String?
+  urgency        String    @default("normal")
+  status         String    @default("pending")
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([status])
+  @@map("callback_requests")
 }
