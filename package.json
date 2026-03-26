@@ -24,7 +24,7 @@
     "voice",
     "receptionist",
     "prisma",
-    "postgresql"
+    "sqlite"
   ],
   "author": "",
   "license": "ISC",

@@ -2,6 +2,7 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # CallGuard – one-command setup
 # Usage:  ./setup.sh
+# No external database needed — SQLite is built in.
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -41,13 +42,6 @@ info "Installing server dependencies …"
 (cd server && npm install)
 
 # ── Step 3: Environment files ────────────────────────────────────────────────
-if [ ! -f .env ]; then
-  cp .env.example .env
-  warn "Created .env from template – edit it to set your DATABASE_URL"
-else
-  info ".env already exists, skipping"
-fi
-
 if [ ! -f server/.env ]; then
   cp server/.env.example server/.env
   warn "Created server/.env from template – edit it to add your Twilio, Google & OpenAI keys"
@@ -55,21 +49,15 @@ else
   info "server/.env already exists, skipping"
 fi
 
-# ── Step 4: Database migration (only if DATABASE_URL looks real) ─────────────
-DB_URL=$(grep -E '^DATABASE_URL=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
-
-if [ -n "$DB_URL" ] && ! echo "$DB_URL" | grep -qiE '(USER:PASSWORD|xxxxx|password@localhost)'; then
-  info "Running database migrations …"
-  if npm run db:migrate 2>&1; then
-    info "Generating Prisma client …"
-    npm run db:generate
-  else
-    warn "Database migration failed – is PostgreSQL running? You can retry later:"
-    echo "    npm run db:migrate && npm run db:generate"
-  fi
+# ── Step 4: Create data directory + database ─────────────────────────────────
+mkdir -p data
+info "Running database migrations (SQLite — no external DB needed) …"
+if npx prisma migrate deploy 2>&1; then
+  info "Generating Prisma client …"
+  npx prisma generate
 else
-  warn "Skipping database migration – update DATABASE_URL in .env first, then run:"
-  echo "    npm run db:migrate && npm run db:generate"
+  warn "Database migration failed. You can retry later:"
+  echo "    npx prisma migrate deploy && npx prisma generate"
 fi
 
 # ── Done! ────────────────────────────────────────────────────────────────────
@@ -80,11 +68,11 @@ echo "╚═══════════════════════�
 echo ""
 echo "Next steps:"
 echo ""
-echo "  1. Edit .env           → set your PostgreSQL DATABASE_URL"
-echo "  2. Edit server/.env    → add Twilio, Google Calendar & OpenAI keys"
-echo "  3. Run migrations      → npm run db:migrate && npm run db:generate"
-echo "  4. Start the server    → npm start"
-echo "  5. Open the dashboard  → http://localhost:3000"
+echo "  1. Edit server/.env    → add Twilio, Google Calendar & OpenAI keys"
+echo "  2. Start the server    → npm start"
+echo "  3. Open the dashboard  → http://localhost:3000"
+echo ""
+echo "No external database needed — CallGuard uses SQLite (data/callguard.db)."
 echo ""
 echo "Or use Docker:  docker compose up"
 echo ""
