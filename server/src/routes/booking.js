@@ -142,7 +142,8 @@ router.post("/confirm", twilioAuth, async (req, res) => {
   // Attempt to create calendar event + send SMS (best-effort, don't fail the call)
   try {
     if (cfg.googleClientEmail && cfg.googlePrivateKey) {
-      const startTime = new Date().toISOString(); // simplified; production would parse date+time
+      // TODO: Parse session.date + session.time into proper dates for production
+      const startTime = new Date().toISOString();
       const endTime = new Date(Date.now() + 30 * 60 * 1000).toISOString();
       await calendar.createEvent({
         summary: `CallGuard: ${session.service || "Appointment"}`,
@@ -208,8 +209,21 @@ router.post("/create", async (req, res) => {
     });
   }
 
-  const startTime = new Date(`${date}T${time}`).toISOString();
-  const endTime = new Date(new Date(`${date}T${time}`).getTime() + 30 * 60 * 1000).toISOString();
+  // Parse time string (handles both "10:00" and "10:00 AM" formats)
+  function parseTo24h(dateStr, timeStr) {
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!match) return new Date(`${dateStr}T${timeStr}`);
+    let hours = parseInt(match[1], 10);
+    const mins = match[2];
+    const ampm = (match[3] || "").toUpperCase();
+    if (ampm === "PM" && hours < 12) hours += 12;
+    if (ampm === "AM" && hours === 12) hours = 0;
+    return new Date(`${dateStr}T${String(hours).padStart(2, "0")}:${mins}:00`);
+  }
+
+  const startDt = parseTo24h(date, time);
+  const startTime = startDt.toISOString();
+  const endTime = new Date(startDt.getTime() + 30 * 60 * 1000).toISOString();
 
   try {
     let calendarEvent = null;

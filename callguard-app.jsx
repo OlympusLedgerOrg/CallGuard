@@ -267,7 +267,7 @@ function LiveCallPanel({plat,live,liveTranscript,onClose}){
   const sendInfo=(text)=>{
     if(!text.trim()) return;
     setSending(true);
-    const callerPhone = live && live.caller !== "David Kim" ? live.from : null;
+    const callerPhone = live && live.from ? live.from : null;
     if(api && callerPhone){
       api.sendSms(callerPhone, text.trim()).then(()=>{
         setSentMsgs(s=>[...s,{text:text.trim(),ts:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}]);

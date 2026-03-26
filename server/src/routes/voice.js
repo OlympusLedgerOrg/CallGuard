@@ -46,7 +46,7 @@ router.post("/respond", twilioAuth, (req, res) => {
   // If booking intent, redirect to booking flow
   if (intent === "booking") {
     twimlResponse.say({ voice: "Polly.Joanna" }, replyText);
-    twimlResponse.redirect(`${cfg.baseUrl}/booking/start?CallSid=${encodeURIComponent(callSid)}`);
+    twimlResponse.redirect(`${cfg.baseUrl}/booking/start`);
     return res.type("text/xml").send(twimlResponse.toString());
   }
 
