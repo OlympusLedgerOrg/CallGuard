@@ -5,6 +5,11 @@ const cfg = require("../config");
 const { requireDashboardAuth, isAuthConfigured } = require("../middleware/dashboard-auth");
 
 const router = Router();
+const salt = cfg.dashboardPasswordSalt || cfg.dashboardJwtSecret || "callguard";
+const hashSecret = (value) =>
+  crypto.scryptSync(String(value), salt, 64);
+const storedUserHash = hashSecret(cfg.dashboardUser || "");
+const storedPassHash = hashSecret(cfg.dashboardPassword || "");
 
 function getCookieOptions() {
   return {
@@ -27,12 +32,8 @@ router.post("/login", (req, res) => {
     return res.status(400).json({ error: "Username and password required" });
   }
 
-  const salt = cfg.dashboardJwtSecret || "callguard";
-  const hashSecret = (value) =>
-    crypto.scryptSync(String(value), salt, 64);
-
-  const userMatch = crypto.timingSafeEqual(hashSecret(username), hashSecret(cfg.dashboardUser));
-  const passMatch = crypto.timingSafeEqual(hashSecret(password), hashSecret(cfg.dashboardPassword));
+  const userMatch = crypto.timingSafeEqual(hashSecret(username), storedUserHash);
+  const passMatch = crypto.timingSafeEqual(hashSecret(password), storedPassHash);
 
   if (!userMatch || !passMatch) {
     return res.status(401).json({ error: "Invalid credentials" });

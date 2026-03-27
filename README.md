@@ -65,6 +65,7 @@ npm start                            # → http://localhost:3000
 | `server/.env` | `DASHBOARD_JWT_TTL` | JWT expiry window (default: `12h`) |
 | `server/.env` | `DASHBOARD_USER` | Dashboard login username |
 | `server/.env` | `DASHBOARD_PASSWORD` | Dashboard login password |
+| `server/.env` | `DASHBOARD_PASSWORD_SALT` | Random salt for dashboard credential hashing |
 | `server/.env` | `DASHBOARD_AUTH_REQUIRED` | Enforce auth even if secret missing (`true`/`false`) |
 | `server/.env` | `CORS_ORIGINS` | Comma-separated allowed origins for API access |
 | `server/.env` | `REQUEST_BODY_LIMIT` | Request body size limit (default: `200kb`) |

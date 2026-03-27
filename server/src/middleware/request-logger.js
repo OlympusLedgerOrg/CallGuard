@@ -10,6 +10,7 @@ function requestLogger(req, res, next) {
     if (!ip) return "";
     if (ip.includes(":")) {
       const parts = ip.split(":");
+      if (parts.length < 2) return ip;
       return parts.slice(0, -2).concat(["*","*"]).join(":");
     }
     const octets = ip.split(".");

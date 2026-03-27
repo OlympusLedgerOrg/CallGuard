@@ -20,6 +20,7 @@ interface Config {
   dashboardJwtTtl: string;
   dashboardUser: string;
   dashboardPassword: string;
+  dashboardPasswordSalt: string;
   dashboardAuthRequired: boolean;
   authCookieName: string;
   requestBodyLimit: string;
@@ -71,6 +72,7 @@ const cfg: Config = {
   dashboardJwtTtl: process.env.DASHBOARD_JWT_TTL || "12h",
   dashboardUser: process.env.DASHBOARD_USER || "",
   dashboardPassword: process.env.DASHBOARD_PASSWORD || "",
+  dashboardPasswordSalt: process.env.DASHBOARD_PASSWORD_SALT || "",
   dashboardAuthRequired:
     process.env.DASHBOARD_AUTH_REQUIRED === "true" || nodeEnv === "production",
   authCookieName: process.env.DASHBOARD_AUTH_COOKIE || "cg_auth",
