@@ -11,6 +11,7 @@ const { Router } = require("express");
 const { processInput, endSession, getSession } = require("../dialogue/ava");
 const { buildTwiML } = require("../twilio/twiml");
 const { DEFAULT_HVAC_CONFIG } = require("../../../config/businesses");
+const twilioAuth = require("../middleware/twilio-auth");
 const {
   sendBookingConfirm,
   sendMissedCallAlert,
@@ -56,7 +57,7 @@ async function loadBizConfig(toNumber) {
 // ── POST /voice/inbound ──────────────────────────────────────────
 // Twilio hits this when a call comes in.
 // We: create a DB call record, start the Ava session, return TwiML greeting.
-router.post("/inbound", async (req, res) => {
+router.post("/inbound", twilioAuth, async (req, res) => {
   const { CallSid, From, To, CallStatus } = req.body;
   console.log(`[Voice] Inbound call ${CallSid} from ${From} to ${To}`);
 
@@ -99,7 +100,7 @@ router.post("/inbound", async (req, res) => {
 // ── POST /voice/input ────────────────────────────────────────────
 // Twilio returns here after the caller speaks.
 // SpeechResult contains the STT transcript of what they said.
-router.post("/input", async (req, res) => {
+router.post("/input", twilioAuth, async (req, res) => {
   const { CallSid, SpeechResult, From } = req.body;
   const callerText = (SpeechResult || "").trim();
 
@@ -136,7 +137,7 @@ router.post("/input", async (req, res) => {
 
 // ── POST /voice/fallback ─────────────────────────────────────────
 // Caller didn't respond in time — Ava re-prompts or logs as missed
-router.post("/fallback", async (req, res) => {
+router.post("/fallback", twilioAuth, async (req, res) => {
   const { CallSid } = req.body;
   console.log(`[Voice] ${CallSid} fallback (no speech detected)`);
 
@@ -155,7 +156,7 @@ router.post("/fallback", async (req, res) => {
 
 // ── POST /voice/status ───────────────────────────────────────────
 // Twilio lifecycle events — completed, busy, no-answer, failed
-router.post("/status", async (req, res) => {
+router.post("/status", twilioAuth, async (req, res) => {
   const { CallSid, CallStatus, CallDuration } = req.body;
   console.log(`[Voice] ${CallSid} status: ${CallStatus} (${CallDuration}s)`);
 

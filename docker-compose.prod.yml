@@ -1,0 +1,46 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# CallGuard – Production Docker Compose
+#
+# Quick start:
+#   1. cp server/.env.example server/.env → set Twilio / Google / OpenAI keys
+#   2. Set DOMAIN in server/.env (e.g. DOMAIN=callguard.example.com)
+#   3. docker compose -f docker-compose.prod.yml up -d
+#
+# Features vs. dev compose:
+#   • Caddy reverse-proxy for automatic HTTPS (Let's Encrypt)
+#   • restart: always for self-healing
+#   • App container NOT exposed directly on host — only Caddy faces the internet
+#   • Persistent data volume for SQLite and Caddy certificates
+# ──────────────────────────────────────────────────────────────────────────────
+services:
+  app:
+    build: .
+    restart: always
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    env_file:
+      - server/.env
+    volumes:
+      - appdata:/app/data
+    depends_on:
+      - caddy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3 (QUIC)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  appdata:
+  caddy_data:
+  caddy_config:

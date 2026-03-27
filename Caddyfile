@@ -1,0 +1,29 @@
+# Caddyfile – production HTTPS reverse proxy for CallGuard
+# Set DOMAIN in server/.env (e.g. DOMAIN=callguard.example.com)
+# Caddy will automatically obtain and renew a Let's Encrypt certificate.
+#
+# For local testing without a real domain use:
+#   http://localhost
+# instead of the {$DOMAIN} block below.
+
+{$DOMAIN} {
+    reverse_proxy app:3000
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # Compress responses
+    encode gzip zstd
+
+    # Access log
+    log {
+        output stderr
+        format json
+    }
+}

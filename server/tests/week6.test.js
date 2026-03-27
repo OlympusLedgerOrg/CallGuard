@@ -7,7 +7,7 @@
 
 const request = require("supertest");
 const { createApp } = require("../src/index");
-const { processInput, endSession, getSession, GATES } = require("../src/dialogue/ava");
+const { processInput, endSession, getSession, GATES, matchIntent, fuzzyMatchIntent } = require("../src/dialogue/ava");
 const { buildTwiML, escapeXml } = require("../src/twilio/twiml");
 const { DEFAULT_HVAC_CONFIG, DEFAULT_MECHANIC_CONFIG } = require("../../config/businesses");
 
@@ -136,6 +136,22 @@ describe("Ava dialogue engine", () => {
     expect(session).toBeTruthy();
     expect(session.callSid).toBe("test-call-1");
     expect(getSession("test-call-1")).toBeUndefined();
+  });
+
+  it("fuzzy matching identifies AC intent from mis-transcribed input", () => {
+    // "compressor" mis-transcribed as "kompressor" — STT accent/error
+    expect(fuzzyMatchIntent("my kompressor stopped working")).toBe("ac");
+  });
+
+  it("fuzzy matching identifies brakes intent from mis-transcribed input", () => {
+    // "squealing" mis-transcribed as "squeling" — common STT error
+    expect(fuzzyMatchIntent("the brakes are squeling")).toBe("brakes");
+  });
+
+  it("fuzzy matching does not fire for binary yes/no/today intents", () => {
+    // Binary intents should return null from fuzzy (handled by regex only)
+    expect(fuzzyMatchIntent("not now", "yes", "first_slot", "today")).toBeNull();
+    expect(fuzzyMatchIntent("yes please", "yes")).toBeNull();
   });
 });
 
