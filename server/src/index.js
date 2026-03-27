@@ -170,7 +170,7 @@ function startServer() {
           if (mode && String(mode).toUpperCase() === "WAL") {
             console.log("✅ SQLite WAL mode enabled");
           } else {
-            console.error("❌ SQLite WAL mode not enabled");
+            console.error(`❌ SQLite WAL mode not enabled (mode: ${mode || "unknown"})`);
           }
         } catch (pragmaErr) {
           console.error("❌ SQLite WAL mode not enabled:", pragmaErr.message);

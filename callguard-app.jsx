@@ -55,6 +55,7 @@ function LoadingScreen({label="Checking access…"}){
   );
 }
 
+// Used only for client-side expiry checks; server enforces auth.
 function parseJwt(token){
   try{
     const parts=token.split(".");

@@ -13,7 +13,7 @@ function requestLogger(req, res, next) {
       if (parts.length >= 4) {
         return `${parts.slice(0, 4).join(":")}::`;
       }
-      return "ipv6:*";
+      return "::*";
     }
     const octets = ip.split(".");
     if (octets.length === 4) {
