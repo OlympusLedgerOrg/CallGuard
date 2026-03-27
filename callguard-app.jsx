@@ -1738,14 +1738,14 @@ function App(){
       }
       if(status===0){
         const token=api.getAuthToken?.();
-        const hasToken=token&&isTokenValid(token);
-        if(token&&!hasToken){
+        const isValidToken=token&&isTokenValid(token);
+        if(token&&!isValidToken){
           api.setAuthToken?.(null);
         }
         setAuthState({
           checking:false,
-          authenticated:Boolean(hasToken),
-          error:hasToken?"":"Server offline — cannot verify session",
+          authenticated:Boolean(isValidToken),
+          error:isValidToken?"":"Server offline — cannot verify session",
           offline:true
         });
         return;

@@ -27,11 +27,12 @@ router.post("/login", (req, res) => {
     return res.status(400).json({ error: "Username and password required" });
   }
 
-  const hash = (value) =>
-    crypto.createHash("sha256").update(String(value)).digest();
+  const salt = cfg.dashboardUser || "callguard";
+  const hashSecret = (value) =>
+    crypto.scryptSync(String(value), salt, 64);
 
-  const userMatch = crypto.timingSafeEqual(hash(username), hash(cfg.dashboardUser));
-  const passMatch = crypto.timingSafeEqual(hash(password), hash(cfg.dashboardPassword));
+  const userMatch = crypto.timingSafeEqual(hashSecret(username), hashSecret(cfg.dashboardUser));
+  const passMatch = crypto.timingSafeEqual(hashSecret(password), hashSecret(cfg.dashboardPassword));
 
   if (!userMatch || !passMatch) {
     return res.status(401).json({ error: "Invalid credentials" });

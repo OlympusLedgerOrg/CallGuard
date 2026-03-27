@@ -83,7 +83,7 @@
 
       fetch("/app.js", { headers: { Accept: "application/javascript" } })
         .then((res) => {
-          const contentType = res.headers.get("content-type") || "";
+          const contentType = (res.headers.get("content-type") || "").toLowerCase();
           if (!res.ok || !contentType.includes("javascript")) {
             throw new Error("Missing bundle");
           }

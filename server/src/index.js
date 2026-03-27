@@ -161,7 +161,15 @@ function startServer() {
           await db.$executeRaw`PRAGMA journal_mode=WAL;`;
           await db.$executeRaw`PRAGMA synchronous=NORMAL;`;
           await db.$executeRaw`PRAGMA busy_timeout=5000;`;
-          console.log("✅ SQLite WAL mode enabled");
+          const modeResult = db.$queryRaw
+            ? await db.$queryRaw`PRAGMA journal_mode;`
+            : null;
+          const mode = Array.isArray(modeResult) ? modeResult[0]?.journal_mode : null;
+          if (mode && String(mode).toUpperCase() === "WAL") {
+            console.log("✅ SQLite WAL mode enabled");
+          } else {
+            console.warn("⚠️ SQLite WAL mode not enabled");
+          }
         } catch (pragmaErr) {
           console.warn("⚠️ SQLite WAL mode not enabled:", pragmaErr.message);
         }

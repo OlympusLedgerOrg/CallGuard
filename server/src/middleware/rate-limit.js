@@ -23,6 +23,9 @@ function createRateLimiter({ windowMs = cfg.rateLimitWindowMs, max = cfg.rateLim
         if (oldestKey) hits.delete(oldestKey);
       }
       existing = { count: 0, resetAt: now + windowMs };
+    } else {
+      hits.delete(key);
+      hits.set(key, existing);
     }
 
     if (now - lastCleanup > windowMs) {
