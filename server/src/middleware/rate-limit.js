@@ -10,12 +10,20 @@ function getClientId(req) {
 
 function createRateLimiter({ windowMs = cfg.rateLimitWindowMs, max = cfg.rateLimitMax } = {}) {
   const hits = new Map();
+  const maxEntries = 10000;
   let lastCleanup = Date.now();
 
   return function rateLimiter(req, res, next) {
     const key = getClientId(req);
     const now = Date.now();
-    const existing = hits.get(key) || { count: 0, resetAt: now + windowMs };
+    let existing = hits.get(key);
+    if (!existing) {
+      if (hits.size >= maxEntries) {
+        const oldestKey = hits.keys().next().value;
+        if (oldestKey) hits.delete(oldestKey);
+      }
+      existing = { count: 0, resetAt: now + windowMs };
+    }
 
     if (now - lastCleanup > windowMs) {
       for (const [entryKey, entry] of hits.entries()) {

@@ -12,6 +12,8 @@ process.env.DASHBOARD_JWT_SECRET = "test-dashboard-secret";
 process.env.DASHBOARD_USER = "owner";
 process.env.DASHBOARD_PASSWORD = "owner-pass";
 
+const fs = require("fs");
+const path = require("path");
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 const { createApp } = require("../src/index");
@@ -20,8 +22,14 @@ const { DEFAULT_HVAC_CONFIG, DEFAULT_MECHANIC_CONFIG } = require("../../config/b
 
 let app;
 let authHeader;
+let createdBundle = false;
+const bundlePath = path.join(__dirname, "../public/app.js");
 
 beforeAll(() => {
+  if (!fs.existsSync(bundlePath)) {
+    fs.writeFileSync(bundlePath, "window.__CallGuardApp = function App() { return null; };");
+    createdBundle = true;
+  }
   app = createApp();
   const token = jwt.sign(
     { sub: process.env.DASHBOARD_USER },
@@ -29,6 +37,12 @@ beforeAll(() => {
     { issuer: "callguard", audience: "dashboard" }
   );
   authHeader = { Authorization: `Bearer ${token}` };
+});
+
+afterAll(() => {
+  if (createdBundle) {
+    fs.unlinkSync(bundlePath);
+  }
 });
 
 afterEach(() => {
@@ -192,6 +206,13 @@ describe("Call Me Back Queue — callback management", () => {
 // ── Offline Mode — service worker ───────────────────────────────
 
 describe("Offline Mode — service worker", () => {
+  it("GET /app.js serves the precompiled bundle when present", async () => {
+    const res = await request(app).get("/app.js");
+    expect(res.status).toBe(200);
+    expect(res.type).toMatch(/javascript/);
+    expect(res.text).toContain("CallGuardApp");
+  });
+
   it("GET /sw.js serves the service worker", async () => {
     const res = await request(app).get("/sw.js");
     expect(res.status).toBe(200);

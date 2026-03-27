@@ -157,9 +157,14 @@ function startServer() {
     try {
       await db.$connect();
       if (db.$executeRaw) {
-        await db.$executeRaw`PRAGMA journal_mode=WAL;`;
-        await db.$executeRaw`PRAGMA synchronous=NORMAL;`;
-        await db.$executeRaw`PRAGMA busy_timeout=5000;`;
+        try {
+          await db.$executeRaw`PRAGMA journal_mode=WAL;`;
+          await db.$executeRaw`PRAGMA synchronous=NORMAL;`;
+          await db.$executeRaw`PRAGMA busy_timeout=5000;`;
+          console.log("✅ SQLite WAL mode enabled");
+        } catch (pragmaErr) {
+          console.warn("⚠️ SQLite WAL mode not enabled:", pragmaErr.message);
+        }
       }
       console.log("✅ Database connected");
     } catch (err) {

@@ -27,15 +27,11 @@ router.post("/login", (req, res) => {
     return res.status(400).json({ error: "Username and password required" });
   }
 
-  const userLength = Math.max(String(username).length, cfg.dashboardUser.length);
-  const passLength = Math.max(String(password).length, cfg.dashboardPassword.length);
-  const userBuf = Buffer.from(String(username).padEnd(userLength, "\0"));
-  const storedUserBuf = Buffer.from(cfg.dashboardUser.padEnd(userLength, "\0"));
-  const passBuf = Buffer.from(String(password).padEnd(passLength, "\0"));
-  const storedPassBuf = Buffer.from(cfg.dashboardPassword.padEnd(passLength, "\0"));
+  const hash = (value) =>
+    crypto.createHash("sha256").update(String(value)).digest();
 
-  const userMatch = crypto.timingSafeEqual(userBuf, storedUserBuf);
-  const passMatch = crypto.timingSafeEqual(passBuf, storedPassBuf);
+  const userMatch = crypto.timingSafeEqual(hash(username), hash(cfg.dashboardUser));
+  const passMatch = crypto.timingSafeEqual(hash(password), hash(cfg.dashboardPassword));
 
   if (!userMatch || !passMatch) {
     return res.status(401).json({ error: "Invalid credentials" });

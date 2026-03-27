@@ -91,6 +91,7 @@
         })
         .then(() => mountApp())
         .catch(async () => {
+          console.warn("Falling back to in-browser Babel compilation.");
           await loadBabelFallback();
           mountApp();
         });

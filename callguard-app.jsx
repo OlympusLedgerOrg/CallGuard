@@ -55,6 +55,23 @@ function LoadingScreen({label="Checking access…"}){
   );
 }
 
+function parseJwt(token){
+  try{
+    const payload=token.split(".")[1];
+    if(!payload) return null;
+    const json=atob(payload.replace(/-/g,"+").replace(/_/g,"/"));
+    return JSON.parse(json);
+  }catch{
+    return null;
+  }
+}
+
+function isTokenValid(token){
+  const payload=parseJwt(token);
+  if(!payload||!payload.exp) return false;
+  return Date.now()<payload.exp*1000;
+}
+
 function LoginScreen({onLogin,error,loading,disabled}){
   const [username,setUsername]=useState("");
   const [password,setPassword]=useState("");
@@ -1720,7 +1737,11 @@ function App(){
         return;
       }
       if(status===0){
-        const hasToken=api.getAuthToken?.();
+        const token=api.getAuthToken?.();
+        const hasToken=token&&isTokenValid(token);
+        if(token&&!hasToken){
+          api.setAuthToken?.(null);
+        }
         setAuthState({
           checking:false,
           authenticated:Boolean(hasToken),
