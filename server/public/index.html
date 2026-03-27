@@ -81,7 +81,7 @@
         }
       };
 
-      // Use no-cache to revalidate bundles when deploying new versions.
+      // Use no-cache to allow caching with revalidation when deploying new versions.
       fetch("/app.js", { cache: "no-cache", headers: { Accept: "application/javascript" } })
         .then((res) => {
           const contentType = (res.headers.get("content-type") || "").toLowerCase();

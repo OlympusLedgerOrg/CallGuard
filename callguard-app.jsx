@@ -44,6 +44,10 @@ const G = `
 .bp:active{transform:scale(.95)}
 `;
 
+const isLocalhost=()=>(
+  typeof window!=="undefined"&&["localhost","127.0.0.1"].includes(window.location.hostname)
+);
+
 function LoadingScreen({label="Checking access…"}){
   return(
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif"}}>
@@ -65,7 +69,7 @@ function parseJwt(token){
     const json=atob(payload.replace(/-/g,"+").replace(/_/g,"/"));
     return JSON.parse(json);
   }catch{
-    if(typeof window!=="undefined"&&["localhost","127.0.0.1"].includes(window.location.hostname)){
+    if(isLocalhost()){
       console.warn("Invalid auth token");
     }
     return null;
@@ -82,7 +86,7 @@ function LoginScreen({onLogin,error,loading,disabled}){
   const [username,setUsername]=useState("");
   const [password,setPassword]=useState("");
   const canSubmit=username.trim()&&password.trim()&&!loading&&!disabled;
-  const showHint=(typeof window!=="undefined")&&["localhost","127.0.0.1"].includes(window.location.hostname);
+  const showHint=isLocalhost();
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:"32px 16px"}}>

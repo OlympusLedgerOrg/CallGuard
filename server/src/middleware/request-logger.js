@@ -24,7 +24,7 @@ function requestLogger(req, res, next) {
   };
 
   res.on("finish", () => {
-    const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+    const durationMs = Number((process.hrtime.bigint() - start) / 1_000_000n);
     const entry = {
       ts: new Date().toISOString(),
       requestId,

@@ -15,10 +15,10 @@ function getCookieOptions() {
   const ttlMatch = String(cfg.dashboardJwtTtl || "").trim().match(/^(\d+)([smhd])?$/);
   let maxAge;
   if (ttlMatch) {
-    const value = Number.parseInt(ttlMatch[1], 10);
+    const ttlValue = Number.parseInt(ttlMatch[1], 10);
     const unit = ttlMatch[2] || "s";
     const multiplier = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[unit];
-    maxAge = value * multiplier;
+    maxAge = ttlValue * multiplier;
   }
 
   return {

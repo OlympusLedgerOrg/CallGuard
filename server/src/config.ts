@@ -79,8 +79,8 @@ const cfg: Config = {
 
   // Request limits
   requestBodyLimit: process.env.REQUEST_BODY_LIMIT || "200kb",
-  rateLimitWindowMs: Number.parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? "", 10) || 60_000,
-  rateLimitMax: Number.parseInt(process.env.RATE_LIMIT_MAX ?? "", 10) || 120,
+  rateLimitWindowMs: Number.parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10),
+  rateLimitMax: Number.parseInt(process.env.RATE_LIMIT_MAX || "120", 10),
 };
 
 export = cfg;
