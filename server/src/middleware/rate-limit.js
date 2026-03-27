@@ -19,8 +19,16 @@ function createRateLimiter({ windowMs = cfg.rateLimitWindowMs, max = cfg.rateLim
     let existing = hits.get(key);
     if (!existing) {
       if (hits.size >= maxEntries) {
-        const oldestKey = hits.keys().next().value;
-        if (oldestKey) hits.delete(oldestKey);
+        for (const [entryKey, entry] of hits.entries()) {
+          if (entry.resetAt < now) {
+            hits.delete(entryKey);
+          }
+          if (hits.size < maxEntries) break;
+        }
+        if (hits.size >= maxEntries) {
+          const oldestKey = hits.keys().next().value;
+          if (oldestKey) hits.delete(oldestKey);
+        }
       }
       existing = { count: 0, resetAt: now + windowMs };
     } else {

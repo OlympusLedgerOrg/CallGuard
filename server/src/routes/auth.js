@@ -27,7 +27,7 @@ router.post("/login", (req, res) => {
     return res.status(400).json({ error: "Username and password required" });
   }
 
-  const salt = cfg.dashboardUser || "callguard";
+  const salt = cfg.dashboardJwtSecret || "callguard";
   const hashSecret = (value) =>
     crypto.scryptSync(String(value), salt, 64);
 

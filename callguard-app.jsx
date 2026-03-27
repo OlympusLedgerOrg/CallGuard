@@ -76,6 +76,7 @@ function LoginScreen({onLogin,error,loading,disabled}){
   const [username,setUsername]=useState("");
   const [password,setPassword]=useState("");
   const canSubmit=username.trim()&&password.trim()&&!loading&&!disabled;
+  const showHint=(typeof window!=="undefined")&&["localhost","127.0.0.1"].includes(window.location.hostname);
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:"32px 16px"}}>
@@ -123,9 +124,11 @@ function LoginScreen({onLogin,error,loading,disabled}){
             Server offline — sign-in is unavailable.
           </div>
         )}
-        <div style={{fontSize:11,color:C.faint,marginTop:14,lineHeight:1.4}}>
-          Configure <span style={{color:C.muted}}>DASHBOARD_USER</span> and <span style={{color:C.muted}}>DASHBOARD_PASSWORD</span> on the server.
-        </div>
+        {showHint&&(
+          <div style={{fontSize:11,color:C.faint,marginTop:14,lineHeight:1.4}}>
+            Configure <span style={{color:C.muted}}>DASHBOARD_USER</span> and <span style={{color:C.muted}}>DASHBOARD_PASSWORD</span> on the server.
+          </div>
+        )}
       </div>
     </div>
   );
