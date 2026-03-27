@@ -13,6 +13,23 @@
 
 // Resolve the base URL from the page origin (served by Express)
 const BASE = typeof window !== "undefined" ? window.location.origin : "";
+const TOKEN_KEY = "callguard_auth_token";
+let authToken = null;
+
+if (typeof window !== "undefined") {
+  authToken = window.localStorage?.getItem(TOKEN_KEY) || null;
+}
+
+function setAuthToken(token) {
+  authToken = token || null;
+  if (typeof window !== "undefined" && window.localStorage) {
+    if (authToken) {
+      window.localStorage.setItem(TOKEN_KEY, authToken);
+    } else {
+      window.localStorage.removeItem(TOKEN_KEY);
+    }
+  }
+}
 
 /* ──────────────── REST helpers ──────────────── */
 
@@ -21,9 +38,14 @@ async function json(method, path, body) {
     const opts = {
       method,
       headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
     };
+    if (authToken) {
+      opts.headers.Authorization = `Bearer ${authToken}`;
+    }
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(`${BASE}${path}`, opts);
+    if (res.status === 401) return null;
     if (!res.ok) return null;
     return res.json();
   } catch {
@@ -31,7 +53,32 @@ async function json(method, path, body) {
   }
 }
 
+async function raw(method, path, body) {
+  try {
+    const opts = {
+      method,
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+    };
+    if (authToken) {
+      opts.headers.Authorization = `Bearer ${authToken}`;
+    }
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(`${BASE}${path}`, opts);
+    const data = res.ok ? await res.json() : null;
+    return { status: res.status, data };
+  } catch {
+    return { status: 0, data: null };
+  }
+}
+
 const api = {
+  /* ── Auth ── */
+  login:  (username, password) => json("POST", "/api/auth/login", { username, password }),
+  logout: () => json("POST", "/api/auth/logout"),
+  getSession: () => raw("GET", "/api/auth/session"),
+  setAuthToken,
+
   /* ── Dashboard (Week 4) ── */
   getStats:       ()           => json("GET",  "/api/dashboard/stats"),
   getActiveCalls: ()           => json("GET",  "/api/dashboard/calls/active"),

@@ -61,6 +61,23 @@ npm start                            # → http://localhost:3000
 | `server/.env` | `PORT` | Server port (default: `3000`) |
 | `server/.env` | `BASE_URL` | Public URL for Twilio webhooks (e.g. ngrok) |
 | `server/.env` | `OWNER_PHONE` | Phone number for missed-call / job-alert SMS |
+| `server/.env` | `DASHBOARD_JWT_SECRET` | JWT signing key for dashboard/API auth |
+| `server/.env` | `DASHBOARD_JWT_TTL` | JWT expiry window (default: `12h`) |
+| `server/.env` | `DASHBOARD_USER` | Dashboard login username |
+| `server/.env` | `DASHBOARD_PASSWORD` | Dashboard login password |
+| `server/.env` | `DASHBOARD_AUTH_REQUIRED` | Enforce auth even if secret missing (`true`/`false`) |
+| `server/.env` | `CORS_ORIGINS` | Comma-separated allowed origins for API access |
+| `server/.env` | `REQUEST_BODY_LIMIT` | Request body size limit (default: `200kb`) |
+| `server/.env` | `RATE_LIMIT_WINDOW_MS` | Rate limit window in ms (default: `60000`) |
+| `server/.env` | `RATE_LIMIT_MAX` | Max requests per window (default: `120`) |
+
+> **Dashboard auth:** Set `DASHBOARD_JWT_SECRET`, `DASHBOARD_USER`, and `DASHBOARD_PASSWORD` in `server/.env`. The dashboard will prompt for login and issue a JWT cookie + token for API calls.
+
+### Security & Ops Notes
+
+- **Twilio webhook validation:** Webhook routes validate `X-Twilio-Signature` when `TWILIO_AUTH_TOKEN` is set.
+- **Metrics:** `/metrics` exposes Prometheus-style counters/gauges (JWT-protected).
+- **Production secrets:** Use environment variables or a secrets manager (do not commit `.env` files).
 
 ### Exposing for Twilio Webhooks
 
@@ -80,11 +97,16 @@ npx ngrok http 3000
 | `npm start` | Start the server |
 | `npm run dev` | Start with hot-reload (watch mode) |
 | `npm test` | Run the test suite |
+| `npm run build:dashboard` | Precompile the dashboard bundle (production) |
 | `npm run db:migrate` | Run database migrations |
 | `npm run db:migrate:dev` | Run migrations in dev mode |
 | `npm run db:generate` | Regenerate Prisma client |
 | `npm run db:studio` | Open Prisma Studio (visual DB browser) |
 | `npm run db:reset` | Drop and recreate the database (dev only) |
+
+> **Production UI build:** Run `npm run build:dashboard` to generate `server/public/app.js`. If the bundle is missing, the server falls back to in-browser Babel compilation.
+
+> **Scaling note:** SQLite runs in WAL mode by default for better concurrency, but for high write volume consider migrating to PostgreSQL, using sticky sessions/Redis pub-sub for WebSocket fanout, and moving retries (calendar/SMS) into a queue worker.
 
 ## Mobile App (iOS & Android)
 

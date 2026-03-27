@@ -44,6 +44,71 @@ const G = `
 .bp:active{transform:scale(.95)}
 `;
 
+function LoadingScreen({label="Checking access…"}){
+  return(
+    <div style={{minHeight:"100vh",background:C.bg,color:C.text,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif"}}>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+        <div style={{fontSize:22,fontWeight:600,color:C.accent}}>CallGuard</div>
+        <div style={{fontSize:13,color:C.muted}}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function LoginScreen({onLogin,error,loading}){
+  const [username,setUsername]=useState("");
+  const [password,setPassword]=useState("");
+  const canSubmit=username.trim()&&password.trim()&&!loading;
+
+  return(
+    <div style={{minHeight:"100vh",background:C.bg,color:C.text,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:"32px 16px"}}>
+      <div style={{width:"100%",maxWidth:360,background:C.surface,border:`1px solid ${C.border}`,borderRadius:18,padding:"28px 24px",boxShadow:"0 18px 40px rgba(0,0,0,.35)"}}>
+        <div style={{fontSize:22,fontWeight:600,color:C.accent}}>CallGuard</div>
+        <div style={{fontSize:13,color:C.muted,marginTop:6,marginBottom:18}}>Sign in to the owner dashboard</div>
+        <label style={{display:"block",fontSize:12,color:C.muted,marginBottom:6}}>Username</label>
+        <input
+          value={username}
+          onChange={(e)=>setUsername(e.target.value)}
+          placeholder="admin"
+          style={{width:"100%",padding:"10px 12px",borderRadius:10,border:`1px solid ${C.border}`,background:"#0B0F17",color:C.text,marginBottom:12}}
+        />
+        <label style={{display:"block",fontSize:12,color:C.muted,marginBottom:6}}>Password</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e)=>setPassword(e.target.value)}
+          placeholder="••••••••"
+          style={{width:"100%",padding:"10px 12px",borderRadius:10,border:`1px solid ${C.border}`,background:"#0B0F17",color:C.text,marginBottom:14}}
+        />
+        {error&&(
+          <div style={{fontSize:12,color:C.danger,marginBottom:12}}>
+            {error}
+          </div>
+        )}
+        <button
+          onClick={()=>canSubmit&&onLogin(username.trim(),password)}
+          disabled={!canSubmit}
+          style={{
+            width:"100%",
+            padding:"11px 12px",
+            borderRadius:10,
+            border:"none",
+            background:canSubmit?C.accent:C.faint,
+            color:canSubmit?"#001018":C.muted,
+            fontWeight:600,
+            cursor:canSubmit?"pointer":"not-allowed",
+          }}
+        >
+          {loading?"Signing in…":"Sign in"}
+        </button>
+        <div style={{fontSize:11,color:C.faint,marginTop:14,lineHeight:1.4}}>
+          Configure <span style={{color:C.muted}}>DASHBOARD_USER</span> and <span style={{color:C.muted}}>DASHBOARD_PASSWORD</span> on the server.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Badge({s}){
   const m={booked:{l:"Booked",bg:C.successDim,fg:C.success},info:{l:"Info",bg:C.accentDim,fg:C.accent},missed:{l:"Missed",bg:C.dangerDim,fg:C.danger},cancelled:{l:"Cancelled",bg:C.warnDim,fg:C.warn},confirmed:{l:"Confirmed",bg:C.successDim,fg:C.success},pending:{l:"Pending",bg:C.warnDim,fg:C.warn}}[s]||{l:s,bg:C.faint,fg:C.muted};
   return <span style={{background:m.bg,color:m.fg,fontSize:10,fontWeight:600,padding:"3px 8px",borderRadius:99,letterSpacing:".04em",flexShrink:0,whiteSpace:"nowrap"}}>{m.l}</span>;
@@ -1623,12 +1688,56 @@ function detectOS(){
 
 /* ── ROOT ── */
 function App(){
+  const [authState,setAuthState]=useState({checking:true,authenticated:false,error:"",offline:false});
+  const [loggingIn,setLoggingIn]=useState(false);
   const [detected]=useState(()=>detectOS());
   const [plat,setPlat]=useState(()=>detectOS().os);
   const [manualOverride,setManualOverride]=useState(false);
   const [tab,setTab]=useState("home");
   const [notif,setNotif]=useState(null);
   const ios=plat==="ios";
+
+  useEffect(()=>{
+    let mounted=true;
+    if(!api||!api.getSession){
+      if(mounted) setAuthState({checking:false,authenticated:true,error:"",offline:true});
+      return()=>{mounted=false;};
+    }
+    api.getSession().then(({status,data})=>{
+      if(!mounted) return;
+      if(status===200&&data?.user){
+        setAuthState({checking:false,authenticated:true,error:"",offline:false});
+        return;
+      }
+      if(status===401){
+        api.setAuthToken?.(null);
+        setAuthState({checking:false,authenticated:false,error:"",offline:false});
+        return;
+      }
+      if(status===0){
+        setAuthState({checking:false,authenticated:true,error:"",offline:true});
+        return;
+      }
+      setAuthState({checking:false,authenticated:false,error:"Unable to reach server",offline:false});
+    });
+    return()=>{mounted=false;};
+  },[]);
+
+  const handleLogin=useCallback(async(username,password)=>{
+    if(!api||!api.login){
+      setAuthState({checking:false,authenticated:false,error:"Server unavailable",offline:false});
+      return;
+    }
+    setLoggingIn(true);
+    const res=await api.login(username,password);
+    if(res?.token){
+      api.setAuthToken?.(res.token);
+      setAuthState({checking:false,authenticated:true,error:"",offline:false});
+    }else{
+      setAuthState({checking:false,authenticated:false,error:res?.error||"Invalid credentials",offline:false});
+    }
+    setLoggingIn(false);
+  },[]);
 
   const switchPlat=(p)=>{setPlat(p);setManualOverride(p!==detected.os);};
 
@@ -1651,6 +1760,11 @@ function App(){
   const navEl=ios
     ?<div style={{position:"absolute",bottom:0,left:0,right:0}}><IOSNav tab={tab} setTab={setTab}/></div>
     :<div style={{position:"absolute",bottom:0,left:0,right:0}}><DroidNav tab={tab} setTab={setTab}/></div>;
+
+  if(authState.checking) return <LoadingScreen/>;
+  if(!authState.authenticated&&!authState.offline){
+    return <LoginScreen onLogin={handleLogin} error={authState.error} loading={loggingIn}/>;
+  }
 
   const inner=(
     <>

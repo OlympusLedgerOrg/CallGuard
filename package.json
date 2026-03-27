@@ -8,6 +8,7 @@
     "start": "node server/src/index.js",
     "dev": "node --watch server/src/index.js",
     "test": "cd server && npm test",
+    "build:dashboard": "cd server && npm run build:dashboard",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:generate": "prisma generate",

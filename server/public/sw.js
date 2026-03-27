@@ -10,6 +10,7 @@ const CACHE_NAME = "callguard-v2.1";
 const APP_SHELL = [
   "/",
   "/index.html",
+  "/app.js",
   "/callguard-app.jsx",
   "/api.js",
   "/vendor/react.production.min.js",

@@ -7,7 +7,13 @@ const twilioRoutes = require("./routes/twilio");
 const voiceRoutes = require("./routes/voice");
 const bookingRoutes = require("./routes/booking");
 const dashboardRoutes = require("./routes/dashboard");
+const authRoutes = require("./routes/auth");
 const { initWebSocket } = require("./ws/live-calls");
+const { requestLogger } = require("./middleware/request-logger");
+const { metricsMiddleware } = require("./middleware/metrics");
+const { formatPrometheus } = require("./services/metrics");
+const { requireDashboardAuth } = require("./middleware/dashboard-auth");
+const { createRateLimiter } = require("./middleware/rate-limit");
 
 // ── Ava dialogue engine modules (from cg.zip) ──
 const avaVoiceRoutes = require("./routes/ava-voice");
@@ -17,18 +23,34 @@ const db = require("./db/client");
 
 function createApp() {
   const app = express();
-  app.use(cors());
-  app.use(express.urlencoded({ extended: false }));
-  app.use(express.json());
+  const corsOptions = {
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (!cfg.corsOrigins.length || cfg.corsOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS origin denied"));
+    },
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  };
 
-  // Request logger
-  app.use((req, _res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-    next();
-  });
+  app.use(cors(corsOptions));
+  app.use(express.urlencoded({ extended: false, limit: cfg.requestBodyLimit }));
+  app.use(express.json({ limit: cfg.requestBodyLimit }));
+
+  app.use(requestLogger);
+  app.use(metricsMiddleware);
+
+  const globalLimiter = createRateLimiter();
+  app.use(globalLimiter);
 
   // Health check
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
+  app.get("/metrics", requireDashboardAuth, (_req, res) => {
+    res.type("text/plain").send(formatPrometheus());
+  });
 
   // Week 1 – Twilio webhook + TwiML
   app.use("/twilio", twilioRoutes);
@@ -40,13 +62,14 @@ function createApp() {
   app.use("/booking", bookingRoutes);
 
   // Week 4 – Owner dashboard REST API (original)
-  app.use("/api/dashboard", dashboardRoutes);
+  app.use("/api/auth", authRoutes);
+  app.use("/api/dashboard", requireDashboardAuth, dashboardRoutes);
 
   // ── Ava engine routes ──
   // Voice webhooks: POST /ava/voice/inbound, /ava/voice/input, /ava/voice/status, /ava/voice/fallback
   app.use("/ava/voice", avaVoiceRoutes);
   // Dashboard REST API: GET /ava/api/stats, /ava/api/calls, /ava/api/jobs, etc.
-  app.use("/ava/api", avaApiRoutes);
+  app.use("/ava/api", requireDashboardAuth, avaApiRoutes);
 
   // ── UI: serve the React frontend ──
   // Vendor libraries from node_modules
@@ -73,6 +96,21 @@ function createApp() {
   // SPA fallback – serve index.html for any unmatched GET
   app.get("*", (_req, res) => {
     res.sendFile(path.join(__dirname, "../public/index.html"));
+  });
+
+  // Error handler
+  app.use((err, req, res, _next) => {
+    if (err && err.message === "CORS origin denied") {
+      return res.status(403).json({ error: "CORS origin denied" });
+    }
+    console.error(
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        requestId: req.requestId,
+        message: err?.message || "Unhandled error",
+      })
+    );
+    return res.status(500).json({ error: "Internal server error" });
   });
 
   return app;
@@ -118,6 +156,11 @@ function startServer() {
     // Test DB connection
     try {
       await db.$connect();
+      if (db.$executeRawUnsafe) {
+        await db.$executeRawUnsafe("PRAGMA journal_mode=WAL;");
+        await db.$executeRawUnsafe("PRAGMA synchronous=NORMAL;");
+        await db.$executeRawUnsafe("PRAGMA busy_timeout=5000;");
+      }
       console.log("✅ Database connected");
     } catch (err) {
       console.error("❌ Database connection failed:", err.message);
