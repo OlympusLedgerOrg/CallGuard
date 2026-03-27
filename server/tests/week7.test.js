@@ -27,6 +27,7 @@ const bundlePath = path.join(__dirname, "../public/app.js");
 
 beforeAll(() => {
   if (!fs.existsSync(bundlePath)) {
+    // Minimal stub to verify app.js is served when present.
     fs.writeFileSync(bundlePath, "window.__CallGuardApp = function App() { return null; };");
     createdBundle = true;
   }

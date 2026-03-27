@@ -9,9 +9,7 @@ function requestLogger(req, res, next) {
   const maskIp = (ip) => {
     if (!ip) return "";
     if (ip.includes(":")) {
-      const parts = ip.split(":");
-      if (parts.length < 2) return ip;
-      return parts.slice(0, -2).concat(["*","*"]).join(":");
+      return "ipv6:*";
     }
     const octets = ip.split(".");
     if (octets.length === 4) {

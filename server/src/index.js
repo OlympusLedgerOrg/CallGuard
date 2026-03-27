@@ -159,6 +159,7 @@ function startServer() {
     // Test DB connection
     try {
       await db.$connect();
+      // $executeRaw is unavailable when Prisma is stubbed (e.g., in tests).
       if (db.$executeRaw) {
         try {
           await db.$executeRaw`PRAGMA journal_mode=WAL;`;
