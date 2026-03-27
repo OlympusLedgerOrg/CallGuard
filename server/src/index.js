@@ -9,11 +9,11 @@ const bookingRoutes = require("./routes/booking");
 const dashboardRoutes = require("./routes/dashboard");
 const authRoutes = require("./routes/auth");
 const { initWebSocket } = require("./ws/live-calls");
+const rateLimit = require("express-rate-limit");
 const { requestLogger } = require("./middleware/request-logger");
 const { metricsMiddleware } = require("./middleware/metrics");
 const { formatPrometheus } = require("./services/metrics");
 const { requireDashboardAuth } = require("./middleware/dashboard-auth");
-const { createRateLimiter } = require("./middleware/rate-limit");
 
 // ── Ava dialogue engine modules (from cg.zip) ──
 const avaVoiceRoutes = require("./routes/ava-voice");
@@ -45,7 +45,12 @@ function createApp() {
 
   // Health check
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
-  const apiLimiter = createRateLimiter();
+  const apiLimiter = rateLimit({
+    windowMs: cfg.rateLimitWindowMs,
+    max: cfg.rateLimitMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
   app.get("/metrics", apiLimiter, requireDashboardAuth, (_req, res) => {
     res.type("text/plain").send(formatPrometheus());
   });
