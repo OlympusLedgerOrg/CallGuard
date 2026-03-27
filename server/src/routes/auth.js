@@ -1,4 +1,5 @@
 const { Router } = require("express");
+const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const cfg = require("../config");
 const { requireDashboardAuth, isAuthConfigured } = require("../middleware/dashboard-auth");
@@ -25,7 +26,18 @@ router.post("/login", (req, res) => {
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password required" });
   }
-  if (username !== cfg.dashboardUser || password !== cfg.dashboardPassword) {
+
+  const userLength = Math.max(String(username).length, cfg.dashboardUser.length);
+  const passLength = Math.max(String(password).length, cfg.dashboardPassword.length);
+  const userBuf = Buffer.from(String(username).padEnd(userLength, "\0"));
+  const storedUserBuf = Buffer.from(cfg.dashboardUser.padEnd(userLength, "\0"));
+  const passBuf = Buffer.from(String(password).padEnd(passLength, "\0"));
+  const storedPassBuf = Buffer.from(cfg.dashboardPassword.padEnd(passLength, "\0"));
+
+  const userMatch = crypto.timingSafeEqual(userBuf, storedUserBuf);
+  const passMatch = crypto.timingSafeEqual(passBuf, storedPassBuf);
+
+  if (!userMatch || !passMatch) {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 

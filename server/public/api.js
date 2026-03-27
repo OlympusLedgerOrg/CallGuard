@@ -31,6 +31,10 @@ function setAuthToken(token) {
   }
 }
 
+function getAuthToken() {
+  return authToken;
+}
+
 /* ──────────────── REST helpers ──────────────── */
 
 async function json(method, path, body) {
@@ -78,6 +82,7 @@ const api = {
   logout: () => json("POST", "/api/auth/logout"),
   getSession: () => raw("GET", "/api/auth/session"),
   setAuthToken,
+  getAuthToken,
 
   /* ── Dashboard (Week 4) ── */
   getStats:       ()           => json("GET",  "/api/dashboard/stats"),

@@ -81,7 +81,7 @@
         }
       };
 
-      fetch("/app.js", { method: "GET", headers: { Accept: "application/javascript" } })
+      fetch("/app.js", { headers: { Accept: "application/javascript" } })
         .then((res) => {
           const contentType = res.headers.get("content-type") || "";
           if (!res.ok || !contentType.includes("javascript")) {

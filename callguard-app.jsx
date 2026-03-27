@@ -55,10 +55,10 @@ function LoadingScreen({label="Checking access…"}){
   );
 }
 
-function LoginScreen({onLogin,error,loading}){
+function LoginScreen({onLogin,error,loading,disabled}){
   const [username,setUsername]=useState("");
   const [password,setPassword]=useState("");
-  const canSubmit=username.trim()&&password.trim()&&!loading;
+  const canSubmit=username.trim()&&password.trim()&&!loading&&!disabled;
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:"32px 16px"}}>
@@ -101,6 +101,11 @@ function LoginScreen({onLogin,error,loading}){
         >
           {loading?"Signing in…":"Sign in"}
         </button>
+        {disabled&&(
+          <div style={{fontSize:11,color:C.warn,marginTop:10}}>
+            Server offline — sign-in is unavailable.
+          </div>
+        )}
         <div style={{fontSize:11,color:C.faint,marginTop:14,lineHeight:1.4}}>
           Configure <span style={{color:C.muted}}>DASHBOARD_USER</span> and <span style={{color:C.muted}}>DASHBOARD_PASSWORD</span> on the server.
         </div>
@@ -1700,7 +1705,7 @@ function App(){
   useEffect(()=>{
     let mounted=true;
     if(!api||!api.getSession){
-      if(mounted) setAuthState({checking:false,authenticated:true,error:"",offline:true});
+      if(mounted) setAuthState({checking:false,authenticated:false,error:"Dashboard API unavailable",offline:true});
       return()=>{mounted=false;};
     }
     api.getSession().then(({status,data})=>{
@@ -1715,7 +1720,13 @@ function App(){
         return;
       }
       if(status===0){
-        setAuthState({checking:false,authenticated:true,error:"",offline:true});
+        const hasToken=api.getAuthToken?.();
+        setAuthState({
+          checking:false,
+          authenticated:Boolean(hasToken),
+          error:hasToken?"":"Server offline — cannot verify session",
+          offline:true
+        });
         return;
       }
       setAuthState({checking:false,authenticated:false,error:"Unable to reach server",offline:false});
@@ -1762,8 +1773,15 @@ function App(){
     :<div style={{position:"absolute",bottom:0,left:0,right:0}}><DroidNav tab={tab} setTab={setTab}/></div>;
 
   if(authState.checking) return <LoadingScreen/>;
-  if(!authState.authenticated&&!authState.offline){
-    return <LoginScreen onLogin={handleLogin} error={authState.error} loading={loggingIn}/>;
+  if(!authState.authenticated){
+    return (
+      <LoginScreen
+        onLogin={handleLogin}
+        error={authState.error}
+        loading={loggingIn}
+        disabled={authState.offline}
+      />
+    );
   }
 
   const inner=(

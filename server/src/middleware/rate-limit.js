@@ -10,11 +10,19 @@ function getClientId(req) {
 
 function createRateLimiter({ windowMs = cfg.rateLimitWindowMs, max = cfg.rateLimitMax } = {}) {
   const hits = new Map();
+  let lastCleanup = Date.now();
 
   return function rateLimiter(req, res, next) {
     const key = getClientId(req);
     const now = Date.now();
     const existing = hits.get(key) || { count: 0, resetAt: now + windowMs };
+
+    if (now - lastCleanup > windowMs) {
+      for (const [entryKey, entry] of hits.entries()) {
+        if (entry.resetAt < now) hits.delete(entryKey);
+      }
+      lastCleanup = now;
+    }
 
     if (now > existing.resetAt) {
       existing.count = 0;

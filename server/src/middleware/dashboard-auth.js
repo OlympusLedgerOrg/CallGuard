@@ -47,6 +47,7 @@ function requireDashboardAuth(req, res, next) {
     const payload = jwt.verify(token, cfg.dashboardJwtSecret, {
       issuer: "callguard",
       audience: "dashboard",
+      algorithms: ["HS256"],
     });
     req.auth = payload;
     return next();

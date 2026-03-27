@@ -29,7 +29,7 @@ function createApp() {
       if (!cfg.corsOrigins.length || cfg.corsOrigins.includes(origin)) {
         return callback(null, true);
       }
-      return callback(new Error("CORS origin denied"));
+      return callback(new Error(`CORS origin denied: ${origin}`));
     },
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
@@ -100,7 +100,7 @@ function createApp() {
 
   // Error handler
   app.use((err, req, res, _next) => {
-    if (err && err.message === "CORS origin denied") {
+    if (err && err.message?.startsWith("CORS origin denied")) {
       return res.status(403).json({ error: "CORS origin denied" });
     }
     console.error(
@@ -156,10 +156,10 @@ function startServer() {
     // Test DB connection
     try {
       await db.$connect();
-      if (db.$executeRawUnsafe) {
-        await db.$executeRawUnsafe("PRAGMA journal_mode=WAL;");
-        await db.$executeRawUnsafe("PRAGMA synchronous=NORMAL;");
-        await db.$executeRawUnsafe("PRAGMA busy_timeout=5000;");
+      if (db.$executeRaw) {
+        await db.$executeRaw`PRAGMA journal_mode=WAL;`;
+        await db.$executeRaw`PRAGMA synchronous=NORMAL;`;
+        await db.$executeRaw`PRAGMA busy_timeout=5000;`;
       }
       console.log("✅ Database connected");
     } catch (err) {
