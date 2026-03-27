@@ -43,12 +43,10 @@ function createApp() {
   app.use(requestLogger);
   app.use(metricsMiddleware);
 
-  const globalLimiter = createRateLimiter();
-  app.use(globalLimiter);
-
   // Health check
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
-  app.get("/metrics", requireDashboardAuth, (_req, res) => {
+  const apiLimiter = createRateLimiter();
+  app.get("/metrics", apiLimiter, requireDashboardAuth, (_req, res) => {
     res.type("text/plain").send(formatPrometheus());
   });
 
@@ -62,14 +60,14 @@ function createApp() {
   app.use("/booking", bookingRoutes);
 
   // Week 4 – Owner dashboard REST API (original)
-  app.use("/api/auth", authRoutes);
-  app.use("/api/dashboard", requireDashboardAuth, dashboardRoutes);
+  app.use("/api/auth", apiLimiter, authRoutes);
+  app.use("/api/dashboard", apiLimiter, requireDashboardAuth, dashboardRoutes);
 
   // ── Ava engine routes ──
   // Voice webhooks: POST /ava/voice/inbound, /ava/voice/input, /ava/voice/status, /ava/voice/fallback
   app.use("/ava/voice", avaVoiceRoutes);
   // Dashboard REST API: GET /ava/api/stats, /ava/api/calls, /ava/api/jobs, etc.
-  app.use("/ava/api", requireDashboardAuth, avaApiRoutes);
+  app.use("/ava/api", apiLimiter, requireDashboardAuth, avaApiRoutes);
 
   // ── UI: serve the React frontend ──
   // Vendor libraries from node_modules
