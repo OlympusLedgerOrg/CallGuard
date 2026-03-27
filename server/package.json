@@ -6,7 +6,6 @@
   "scripts": {
     "start": "node -r ts-node/register src/index.js",
     "dev": "node --watch -r ts-node/register src/index.js",
-    "build:dashboard": "node scripts/build-dashboard.js",
     "test": "node -r ts-node/register ./node_modules/jest/bin/jest.js --forceExit --detectOpenHandles",
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
