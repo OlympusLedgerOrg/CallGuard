@@ -1,8 +1,36 @@
-require("dotenv").config({ path: __dirname + "/../.env" });
+import path from "path";
+import { config as loadEnv } from "dotenv";
+
+loadEnv({ path: path.resolve(__dirname, "../.env") });
+
+interface Config {
+  port: number;
+  baseUrl: string;
+  baseOrigin: string;
+  nodeEnv: string;
+  corsOrigins: string[];
+  twilioAccountSid: string;
+  twilioAuthToken: string;
+  twilioPhoneNumber: string;
+  googleClientEmail: string;
+  googlePrivateKey: string;
+  googleCalendarId: string;
+  openaiApiKey: string;
+  dashboardJwtSecret: string;
+  dashboardJwtTtl: string;
+  dashboardUser: string;
+  dashboardPassword: string;
+  dashboardAuthRequired: boolean;
+  authCookieName: string;
+  requestBodyLimit: string;
+  rateLimitWindowMs: number;
+  rateLimitMax: number;
+}
 
 const nodeEnv = process.env.NODE_ENV || "development";
 const baseUrl = process.env.BASE_URL || "http://localhost:3000";
 let baseOrigin = "";
+
 try {
   baseOrigin = new URL(baseUrl).origin;
 } catch {}
@@ -11,12 +39,15 @@ const corsOrigins = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+
 if (!corsOrigins.length && baseOrigin) {
   corsOrigins.push(baseOrigin);
 }
 
-const cfg = {
-  port: parseInt(process.env.PORT, 10) || 3000,
+const parsedPort = Number.parseInt(process.env.PORT ?? "", 10);
+
+const cfg: Config = {
+  port: Number.isNaN(parsedPort) ? 3000 : parsedPort,
   baseUrl,
   baseOrigin,
   nodeEnv,
@@ -46,8 +77,8 @@ const cfg = {
 
   // Request limits
   requestBodyLimit: process.env.REQUEST_BODY_LIMIT || "200kb",
-  rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 60_000,
-  rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX, 10) || 120,
+  rateLimitWindowMs: Number.parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? "", 10) || 60_000,
+  rateLimitMax: Number.parseInt(process.env.RATE_LIMIT_MAX ?? "", 10) || 120,
 };
 
-module.exports = cfg;
+export = cfg;

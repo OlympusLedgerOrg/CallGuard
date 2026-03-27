@@ -4,10 +4,11 @@
   "description": "CallGuard AI receptionist backend – Twilio voice, booking, dashboard",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
+    "start": "node -r ts-node/register src/index.js",
+    "dev": "node --watch -r ts-node/register src/index.js",
     "build:dashboard": "node scripts/build-dashboard.js",
-    "test": "jest --forceExit --detectOpenHandles"
+    "test": "node -r ts-node/register ./node_modules/jest/bin/jest.js --forceExit --detectOpenHandles",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "keywords": [
     "twilio",
@@ -32,8 +33,12 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/node": "^25.5.0",
     "jest": "^29.7.0",
-    "supertest": "^7.0.0"
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.4.6",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   },
   "overrides": {
     "brace-expansion": ">=5.0.5"
