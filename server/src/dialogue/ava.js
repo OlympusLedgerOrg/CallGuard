@@ -5,13 +5,16 @@
 //
 // Architecture:
 //   CallSession  →  Gate (triage|logistics|offer|capture|end)
-//               →  Intent classifier
+//               →  Intent classifier (regex → fuse.js fuzzy fallback)
 //               →  Response builder
 //               →  Disposition emitter
 //
-// No LLM required. Pure rule-based with regex intent matching.
+// No LLM required. Pure rule-based with regex intent matching and
+// fuse.js fuzzy-match fallback for misheard / mis-transcribed words.
 // Reads business config (services, hours, slots) at session start.
 // ══════════════════════════════════════════════════════════════════
+
+const Fuse = require("fuse.js");
 
 // ── Call session store (in-memory; replace with Redis for multi-instance) ──
 const sessions = new Map();
@@ -71,12 +74,111 @@ const INTENTS = {
   affirm_name: [/.+/],  // catch-all for name capture — any non-empty response
 };
 
+// ── Fuzzy intent corpus ───────────────────────────────────────────
+// Single-keyword entries — fuse.js matches individual words from the
+// caller's speech against these terms so STT mis-transcriptions like
+// "squeling" (squealing) or "kompressor" (compressor) are caught.
+// Covers only TECHNICAL intents; binary/conversational ones (yes/no/
+// today/slots) use strict regex only to avoid false positives.
+const FUZZY_CORPUS = [
+  // AC / cooling
+  { intent: "ac",           phrase: "conditioning" },
+  { intent: "ac",           phrase: "compressor"   },
+  { intent: "ac",           phrase: "refrigerant"  },
+  { intent: "ac",           phrase: "coolant"      },
+  // Heating
+  { intent: "heating",      phrase: "furnace"   },
+  { intent: "heating",      phrase: "boiler"    },
+  { intent: "heating",      phrase: "radiator"  },
+  // Install / replace
+  { intent: "install",      phrase: "installation" },
+  { intent: "install",      phrase: "replacement"  },
+  // Maintenance
+  { intent: "maintenance",  phrase: "maintenance"  },
+  { intent: "maintenance",  phrase: "inspection"   },
+  // Brakes
+  { intent: "brakes",       phrase: "squealing"    },
+  { intent: "brakes",       phrase: "caliper"      },
+  { intent: "brakes",       phrase: "grinding"     },
+  // Engine
+  { intent: "engine",       phrase: "misfiring"    },
+  { intent: "engine",       phrase: "overheating"  },
+  { intent: "engine",       phrase: "stalling"     },
+  // Won't start
+  { intent: "wont_start",   phrase: "battery"      },
+  { intent: "wont_start",   phrase: "starter"      },
+  // Oil
+  { intent: "oil",          phrase: "lubrication"  },
+  // Tires
+  { intent: "tires",        phrase: "alignment"    },
+  { intent: "tires",        phrase: "puncture"     },
+  { intent: "tires",        phrase: "rotation"     },
+  // Transmission
+  { intent: "transmission", phrase: "transmission" },
+  { intent: "transmission", phrase: "gearbox"      },
+  // Price / hours
+  { intent: "price",        phrase: "estimate"     },
+  { intent: "price",        phrase: "quotation"    },
+  { intent: "hours",        phrase: "schedule"     },
+  // Emergency / escalate
+  { intent: "emergency_q",  phrase: "emergency"    },
+  { intent: "escalate",     phrase: "supervisor"   },
+  { intent: "escalate",     phrase: "manager"      },
+];
+
+// Intents that benefit from fuzzy fallback (technical vocabulary / issue types).
+// Binary/conversational intents (yes, no, today, tomorrow, first_slot, second_slot,
+// callback) rely on regex only to avoid false positives on short phrases.
+const FUZZY_ELIGIBLE = new Set([
+  "ac", "heating", "install", "maintenance",
+  "brakes", "engine", "wont_start", "oil", "tires", "transmission",
+  "price", "hours", "emergency_q", "escalate",
+]);
+
+const _fuse = new Fuse(FUZZY_CORPUS, {
+  keys: ["phrase"],
+  threshold: 0.3,    // per-word matching: 0.3 catches ~1-2 char STT errors
+  includeScore: true,
+  minMatchCharLength: 4,
+});
+
+/**
+ * fuzzyMatchIntent — returns the best-matching intent key for `text`
+ * using fuse.js word-level matching.  Each word in `text` is checked
+ * individually against the keyword corpus so single mis-transcribed
+ * terms (e.g. "squeling" → squealing → brakes) are caught even when
+ * the surrounding words are different.
+ *
+ * Restricted to FUZZY_ELIGIBLE intents; binary/conversational intents
+ * always return null.
+ */
+function fuzzyMatchIntent(text, ...keys) {
+  const eligibleKeys = keys.length
+    ? keys.filter(k => FUZZY_ELIGIBLE.has(k))
+    : [...FUZZY_ELIGIBLE];
+  if (eligibleKeys.length === 0) return null;
+
+  const words = text.toLowerCase().split(/\s+/).filter(w => w.length >= 6);
+  for (const word of words) {
+    const results = _fuse.search(word);
+    for (const result of results) {
+      const candidate = result.item.intent;
+      if (eligibleKeys.includes(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+}
+
 function matchIntent(text, ...keys) {
+  // 1. Try strict regex first (fast path)
   for (const key of keys) {
     const patterns = INTENTS[key] || [];
     if (patterns.some(r => r.test(text))) return key;
   }
-  return null;
+  // 2. Fuzzy fallback for misheard / mis-transcribed technical speech
+  return fuzzyMatchIntent(text, ...keys);
 }
 
 // ── Response templates ────────────────────────────────────────────
@@ -457,4 +559,4 @@ function getSession(callSid) {
   return sessions.get(callSid);
 }
 
-module.exports = { processInput, endSession, getSession, GATES, matchIntent };
+module.exports = { processInput, endSession, getSession, GATES, matchIntent, fuzzyMatchIntent };

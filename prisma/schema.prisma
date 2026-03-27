@@ -8,6 +8,11 @@ generator client {
 
 datasource db {
   provider = "sqlite"
+  // To switch to PostgreSQL:
+  //   1. Change provider above to "postgresql"
+  //   2. Set DATABASE_URL="postgresql://user:pass@host:5432/dbname?schema=public"
+  //      in your .env (root) or via the DATABASE_URL environment variable.
+  //   3. Run: prisma migrate deploy
 }
 
 // ─── Businesses ──────────────────────────────────────────────────────────────
