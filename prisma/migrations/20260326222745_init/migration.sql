@@ -135,3 +135,51 @@ CREATE UNIQUE INDEX "oauth_tokens_business_id_provider_key" ON "oauth_tokens"("b
 
 -- CreateIndex
 CREATE INDEX "sms_logs_business_id_idx" ON "sms_logs"("business_id");
+
+-- Add missing columns to calls
+ALTER TABLE "calls" ADD COLUMN "disposition"     TEXT;
+ALTER TABLE "calls" ADD COLUMN "ai_handled"      BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "calls" ADD COLUMN "job_request_id"  TEXT;
+
+-- CreateTable: job_requests
+CREATE TABLE "job_requests" (
+    "id"             TEXT NOT NULL PRIMARY KEY,
+    "business_id"    TEXT NOT NULL,
+    "call_id"        TEXT,
+    "issue"          TEXT,
+    "address"        TEXT,
+    "urgency"        TEXT NOT NULL DEFAULT 'normal',
+    "disposition"    TEXT NOT NULL DEFAULT 'lead',
+    "status"         TEXT NOT NULL DEFAULT 'new',
+    "customer_name"  TEXT,
+    "customer_phone" TEXT,
+    "created_at"     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at"     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "job_requests_business_id_fkey"
+      FOREIGN KEY ("business_id") REFERENCES "businesses" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateIndex
+CREATE INDEX "job_requests_business_id_idx" ON "job_requests"("business_id");
+CREATE INDEX "job_requests_status_idx"      ON "job_requests"("status");
+
+-- CreateTable: callback_requests
+CREATE TABLE "callback_requests" (
+    "id"           TEXT NOT NULL PRIMARY KEY,
+    "business_id"  TEXT NOT NULL,
+    "call_id"      TEXT,
+    "caller_name"  TEXT,
+    "caller_phone" TEXT NOT NULL,
+    "reason"       TEXT,
+    "urgency"      TEXT NOT NULL DEFAULT 'normal',
+    "status"       TEXT NOT NULL DEFAULT 'pending',
+    "notes"        TEXT,
+    "created_at"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "callback_requests_business_id_fkey"
+      FOREIGN KEY ("business_id") REFERENCES "businesses" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateIndex
+CREATE INDEX "callback_requests_business_id_idx" ON "callback_requests"("business_id");
+CREATE INDEX "callback_requests_status_idx"      ON "callback_requests"("status");

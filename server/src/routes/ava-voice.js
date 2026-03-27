@@ -68,16 +68,14 @@ router.post("/inbound", async (req, res) => {
     try {
       callRecord = await db.calls.create({
         data: {
-          business_id: business.id,
-          call_sid:    CallSid,
-          from_number: From,
-          to_number:   To,
-          status:      "in-progress",
-          ai_handled:  true,
+          businessId:    business.id,
+          twilioCallSid: CallSid,
+          callerNumber:  From,
+          aiHandled:     true,
         },
       });
       await db.transcripts.create({
-        data: { call_id: callRecord.id, lines: [] },
+        data: { callId: callRecord.id },
       });
     } catch (err) {
       console.error("[Voice] DB create error:", err.message);
@@ -164,23 +162,22 @@ router.post("/status", async (req, res) => {
   pushCallStatus(CallSid, CallStatus);
 
   try {
-    const call = await db.calls.findFirst({ where: { call_sid: CallSid } });
+    const call = await db.calls.findFirst({ where: { twilioCallSid: CallSid } });
     if (!call) return res.sendStatus(200);
 
     if (["completed", "busy", "no-answer", "failed", "canceled"].includes(CallStatus)) {
       await db.calls.update({
         where: { id: call.id },
         data: {
-          status:       CallStatus === "completed" ? "completed" : "missed",
-          duration_secs: CallDuration ? parseInt(CallDuration) : null,
-          ended_at:      new Date(),
+          outcome:        CallStatus === "completed" ? "completed" : "missed",
+          durationSeconds: CallDuration ? parseInt(CallDuration) : null,
         },
       });
 
       // If call ended with no booking — fire missed call alert
       const session = getSession(CallSid);
       if (session && ["lead", null].includes(session.disposition)) {
-        const business = await db.businesses.findUnique({ where: { id: call.business_id } });
+        const business = await db.businesses.findUnique({ where: { id: call.businessId } });
         if (business) await sendMissedCallAlert({ business, call });
       }
 
@@ -203,8 +200,8 @@ async function handleCallEnd(callSid, session, fromNumber, toNumber) {
   // Fetch DB records
   let call, business;
   try {
-    call     = await db.calls.findFirst({ where: { call_sid: callSid } });
-    business = call ? await db.businesses.findUnique({ where: { id: call.business_id } }) : null;
+    call     = await db.calls.findFirst({ where: { twilioCallSid: callSid } });
+    business = call ? await db.businesses.findUnique({ where: { id: call.businessId } }) : null;
   } catch { /* non-critical */ }
 
   // ── Create job_request ────────────────────────────────────────
@@ -213,15 +210,14 @@ async function handleCallEnd(callSid, session, fromNumber, toNumber) {
     try {
       jobRequest = await db.job_requests.create({
         data: {
-          business_id:   business.id,
-          customer_name: customer_name || null,
-          phone:         customer_phone || fromNumber,
+          businessId:    business.id,
+          customerName:  customer_name || null,
+          customerPhone: customer_phone || fromNumber,
           issue:         issue || "General enquiry",
           address:       address || null,
           urgency:       disposition === "emergency" ? "emergency" : "normal",
           disposition:   disposition || "lead",
           status:        disposition === "booked" ? "scheduled" : "new",
-          scheduled_for: slot?.iso ? new Date(slot.iso) : null,
         },
       });
 
@@ -229,7 +225,7 @@ async function handleCallEnd(callSid, session, fromNumber, toNumber) {
       if (call) {
         await db.calls.update({
           where: { id: call.id },
-          data:  { job_request_id: jobRequest.id, disposition },
+          data:  { jobRequestId: jobRequest.id, disposition },
         });
       }
     } catch (err) {
@@ -242,20 +238,19 @@ async function handleCallEnd(callSid, session, fromNumber, toNumber) {
     try {
       const appointment = await db.appointments.create({
         data: {
-          business_id:    business.id,
-          job_request_id: jobRequest?.id || null,
-          customer_name:  customer_name || "Customer",
-          customer_phone: customer_phone,
-          service:        issue || "Service",
-          scheduled_for:  new Date(slot.iso),
-          status:         "confirmed",
+          businessId:    business.id,
+          customerName:  customer_name || "Customer",
+          customerPhone: customer_phone,
+          serviceType:   issue || "Service",
+          scheduledFor:  new Date(slot.iso),
+          status:        "confirmed",
         },
       });
 
       if (call) {
         await db.calls.update({
           where: { id: call.id },
-          data:  { appointment_id: appointment.id },
+          data:  { appointmentId: appointment.id },
         });
       }
 
@@ -287,9 +282,9 @@ async function handleCallEnd(callSid, session, fromNumber, toNumber) {
 // ── Async transcript append (fire-and-forget) ────────────────────
 async function appendTranscript(callSid, callerText, avaText) {
   try {
-    const call = await db.calls.findFirst({ where: { call_sid: callSid } });
+    const call = await db.calls.findFirst({ where: { twilioCallSid: callSid } });
     if (!call) return;
-    const tx = await db.transcripts.findUnique({ where: { call_id: call.id } });
+    const tx = await db.transcripts.findUnique({ where: { callId: call.id } });
     if (!tx) return;
 
     const lines = Array.isArray(tx.lines) ? tx.lines : [];
@@ -298,7 +293,7 @@ async function appendTranscript(callSid, callerText, avaText) {
     if (avaText)    lines.push({ from: "ava",    text: avaText,    ts: now + 1 });
 
     await db.transcripts.update({
-      where: { call_id: call.id },
+      where: { callId: call.id },
       data:  { lines },
     });
   } catch { /* non-critical — don't break the call */ }

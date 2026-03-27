@@ -136,12 +136,11 @@ router.post("/appointments", async (req, res) => {
   try {
     const appointment = await db.appointments.create({
       data: {
-        business_id:    businessId,
-        customer_name:  customerName || "Customer",
-        customer_phone: customerPhone,
-        service,
-        scheduled_for:  new Date(scheduledFor),
-        duration_mins:  durationMins || 60,
+        businessId,
+        customerName:  customerName || "Customer",
+        customerPhone,
+        serviceType:   service,
+        scheduledFor:  new Date(scheduledFor),
         notes:          notes || null,
         status:         "confirmed",
       },
