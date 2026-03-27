@@ -72,7 +72,7 @@ npm start                            # → http://localhost:3000
 | `server/.env` | `RATE_LIMIT_WINDOW_MS` | Rate limit window in ms (default: `60000`) |
 | `server/.env` | `RATE_LIMIT_MAX` | Max requests per window (default: `120`) |
 
-> **Dashboard auth:** Set `DASHBOARD_JWT_SECRET`, `DASHBOARD_USER`, and `DASHBOARD_PASSWORD` in `server/.env`. The dashboard will prompt for login and issue a JWT cookie + token for API calls.
+> **Dashboard auth:** Set `DASHBOARD_JWT_SECRET`, `DASHBOARD_USER`, `DASHBOARD_PASSWORD`, and `DASHBOARD_PASSWORD_SALT` in `server/.env`. The dashboard will prompt for login and issue a JWT cookie + token for API calls.
 
 ### Security & Ops Notes
 

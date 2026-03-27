@@ -64,6 +64,9 @@ function parseJwt(token){
     const json=atob(payload.replace(/-/g,"+").replace(/_/g,"/"));
     return JSON.parse(json);
   }catch{
+    if(typeof window!=="undefined"&&["localhost","127.0.0.1"].includes(window.location.hostname)){
+      console.warn("Invalid auth token");
+    }
     return null;
   }
 }

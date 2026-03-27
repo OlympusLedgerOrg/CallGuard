@@ -5,6 +5,7 @@
 process.env.DASHBOARD_JWT_SECRET = "test-dashboard-secret";
 process.env.DASHBOARD_USER = "owner";
 process.env.DASHBOARD_PASSWORD = "owner-pass";
+process.env.DASHBOARD_PASSWORD_SALT = "test-salt";
 
 const request = require("supertest");
 const http = require("http");

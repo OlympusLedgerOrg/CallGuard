@@ -5,11 +5,11 @@ const cfg = require("../config");
 const { requireDashboardAuth, isAuthConfigured } = require("../middleware/dashboard-auth");
 
 const router = Router();
-const salt = cfg.dashboardPasswordSalt || cfg.dashboardJwtSecret || "callguard";
+const hasSalt = Boolean(cfg.dashboardPasswordSalt);
 const hashSecret = (value) =>
-  crypto.scryptSync(String(value), salt, 64);
-const storedUserHash = hashSecret(cfg.dashboardUser || "");
-const storedPassHash = hashSecret(cfg.dashboardPassword || "");
+  crypto.scryptSync(String(value), cfg.dashboardPasswordSalt, 64);
+const storedUserHash = hasSalt ? hashSecret(cfg.dashboardUser || "") : null;
+const storedPassHash = hasSalt ? hashSecret(cfg.dashboardPassword || "") : null;
 
 function getCookieOptions() {
   return {
@@ -25,6 +25,9 @@ router.post("/login", (req, res) => {
   }
   if (!cfg.dashboardUser || !cfg.dashboardPassword) {
     return res.status(503).json({ error: "Dashboard credentials not configured" });
+  }
+  if (!cfg.dashboardPasswordSalt || !storedUserHash || !storedPassHash) {
+    return res.status(503).json({ error: "Dashboard password salt not configured" });
   }
 
   const { username, password } = req.body || {};
