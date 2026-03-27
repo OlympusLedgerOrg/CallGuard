@@ -28,4 +28,4 @@ RUN mkdir -p data && npx prisma generate
 EXPOSE 3000
 
 # ── Start: migrate + run ────────────────────────────────────────────────────
-CMD ["sh", "-c", "npx prisma migrate deploy && node server/src/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && TS_NODE_PROJECT=./server/tsconfig.json node -r ./server/node_modules/ts-node/register server/src/index.js"]

@@ -1,7 +1,24 @@
-require("dotenv").config({ path: __dirname + "/../.env" });
+import path from "path";
+import { config as loadEnv } from "dotenv";
 
-const cfg = {
-  port: parseInt(process.env.PORT, 10) || 3000,
+loadEnv({ path: path.resolve(__dirname, "../.env") });
+
+interface Config {
+  port: number;
+  baseUrl: string;
+  twilioAccountSid: string;
+  twilioAuthToken: string;
+  twilioPhoneNumber: string;
+  googleClientEmail: string;
+  googlePrivateKey: string;
+  googleCalendarId: string;
+  openaiApiKey: string;
+}
+
+const parsedPort = Number.parseInt(process.env.PORT ?? "", 10);
+
+const cfg: Config = {
+  port: Number.isNaN(parsedPort) ? 3000 : parsedPort,
   baseUrl: process.env.BASE_URL || "http://localhost:3000",
 
   // Twilio
@@ -18,4 +35,4 @@ const cfg = {
   openaiApiKey: process.env.OPENAI_API_KEY || "",
 };
 
-module.exports = cfg;
+export = cfg;
