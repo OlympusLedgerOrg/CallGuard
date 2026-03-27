@@ -6,6 +6,8 @@
 const { Router } = require("express");
 const { sendMidCallInfo, sendFollowUp, sendBookingConfirm } = require("../sms/sms");
 const db = require("../db/client");
+const { processInput, endSession, getSession, GATES } = require("../dialogue/ava");
+const { DEFAULT_HVAC_CONFIG, DEFAULT_MECHANIC_CONFIG } = require("../../../config/businesses");
 
 const router = Router();
 
@@ -134,12 +136,11 @@ router.post("/appointments", async (req, res) => {
   try {
     const appointment = await db.appointments.create({
       data: {
-        business_id:    businessId,
-        customer_name:  customerName || "Customer",
-        customer_phone: customerPhone,
-        service,
-        scheduled_for:  new Date(scheduledFor),
-        duration_mins:  durationMins || 60,
+        businessId,
+        customerName:  customerName || "Customer",
+        customerPhone,
+        serviceType:   service,
+        scheduledFor:  new Date(scheduledFor),
         notes:          notes || null,
         status:         "confirmed",
       },
@@ -200,6 +201,152 @@ router.post("/jobs/:id/follow-up", async (req, res) => {
     if (!job || !business) return res.status(404).json({ error: "Not found" });
     await sendFollowUp({ business, jobRequest: job });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// ⭐ Test My AI — simulated call without Twilio
+// ══════════════════════════════════════════════════════════════════
+
+// POST /api/test-call — start or continue a test dialogue session
+router.post("/test-call", (req, res) => {
+  const { sessionId, text, businessType } = req.body;
+  if (!sessionId) return res.status(400).json({ error: "sessionId required" });
+
+  const config = businessType === "mechanic" ? DEFAULT_MECHANIC_CONFIG : DEFAULT_HVAC_CONFIG;
+  try {
+    const result = processInput(sessionId, text || "", config);
+    res.json({
+      sessionId,
+      gate:        result.session.gate,
+      response:    result.action.text || "",
+      type:        result.action.type,
+      done:        result.done,
+      disposition: result.session.disposition,
+      transcript:  result.session.transcript,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/test-call/:sessionId — end a test session
+router.delete("/test-call/:sessionId", (req, res) => {
+  const session = endSession(req.params.sessionId);
+  res.json({ ok: true, session: session || null });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// ⭐ Script Wizard — CRUD for business dialogue scripts
+// ══════════════════════════════════════════════════════════════════
+
+// GET /api/scripts — get current business scripts
+router.get("/scripts", async (req, res) => {
+  const { businessId } = req.query;
+  if (!businessId) return res.status(400).json({ error: "businessId required" });
+
+  try {
+    const business = await db.businesses.findUnique({ where: { id: businessId } });
+    if (!business) return res.status(404).json({ error: "Business not found" });
+
+    // Scripts are stored as JSON in systemPrompt field
+    let scripts = null;
+    try { scripts = JSON.parse(business.system_prompt); } catch { /* not JSON yet */ }
+    res.json({
+      businessId,
+      scripts: scripts || {
+        greeting: `Thanks for calling ${business.name}. I'm Ava, your AI receptionist. How can I help you today?`,
+        triage_questions: {},
+        escalation_triggers: [],
+        sms_templates: {},
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/scripts — update business dialogue scripts
+router.put("/scripts", async (req, res) => {
+  const { businessId, scripts } = req.body;
+  if (!businessId || !scripts) return res.status(400).json({ error: "businessId and scripts required" });
+
+  try {
+    const business = await db.businesses.findUnique({ where: { id: businessId } });
+    if (!business) return res.status(404).json({ error: "Business not found" });
+
+    await db.businesses.update({
+      where: { id: businessId },
+      data: { system_prompt: JSON.stringify(scripts) },
+    });
+    res.json({ ok: true, scripts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// ⭐ Call Me Back Queue — callback request management
+// ══════════════════════════════════════════════════════════════════
+
+// GET /api/callbacks — list callback queue
+router.get("/callbacks", async (req, res) => {
+  const { businessId, status } = req.query;
+  if (!businessId) return res.status(400).json({ error: "businessId required" });
+
+  try {
+    const callbacks = await db.callback_requests.findMany({
+      where: {
+        business_id: businessId,
+        ...(status ? { status } : {}),
+      },
+      orderBy: [{ urgency: "desc" }, { created_at: "desc" }],
+      take: 50,
+    });
+    res.json(callbacks);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/callbacks — add a callback request
+router.post("/callbacks", async (req, res) => {
+  const { businessId, callerName, callerPhone, reason, urgency, callId } = req.body;
+  if (!businessId || !callerPhone) {
+    return res.status(400).json({ error: "businessId and callerPhone required" });
+  }
+
+  try {
+    const callback = await db.callback_requests.create({
+      data: {
+        business_id: businessId,
+        call_id:     callId || null,
+        caller_name: callerName || null,
+        caller_phone: callerPhone,
+        reason:      reason || null,
+        urgency:     urgency || "normal",
+        status:      "pending",
+      },
+    });
+    res.status(201).json(callback);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/callbacks/:id — update callback status
+router.patch("/callbacks/:id", async (req, res) => {
+  const { status, notes } = req.body;
+  if (!status) return res.status(400).json({ error: "status required" });
+
+  try {
+    const callback = await db.callback_requests.update({
+      where: { id: req.params.id },
+      data: { status, ...(notes !== undefined ? { notes } : {}) },
+    });
+    res.json(callback);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

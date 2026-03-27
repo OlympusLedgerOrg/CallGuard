@@ -34,6 +34,8 @@ model Business {
   appointments  Appointment[]
   oauthTokens   OauthToken[]
   smsLogs       SmsLog[]
+  jobRequests   JobRequest[]
+  callbackRequests CallbackRequest[]
 
   @@map("businesses")
 }
@@ -69,6 +71,10 @@ model Call {
   appointmentId  String?  @map("appointment_id")
   durationSeconds Int?    @map("duration_seconds")
   createdAt      DateTime @default(now()) @map("created_at")
+
+  disposition     String?
+  aiHandled       Boolean  @default(false) @map("ai_handled")
+  jobRequestId    String?  @map("job_request_id")
 
   business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   transcript  Transcript?
@@ -154,4 +160,49 @@ model SmsLog {
 
   @@index([businessId])
   @@map("sms_logs")
+}
+
+// ─── Job Requests ─────────────────────────────────────────────────────────────
+// Tracks job/service requests created by Ava from inbound calls.
+model JobRequest {
+  id           String   @id @default(uuid())
+  businessId   String   @map("business_id")
+  callId       String?  @map("call_id")
+  issue        String?
+  address      String?
+  urgency      String   @default("normal")
+  disposition  String   @default("lead")
+  status       String   @default("new")
+  customerName  String?  @map("customer_name")
+  customerPhone String?  @map("customer_phone")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([status])
+  @@map("job_requests")
+}
+
+// ─── Callback Requests ────────────────────────────────────────────────────────
+// Call Me Back queue — captures unresolved calls so the owner can tap-to-callback.
+model CallbackRequest {
+  id             String    @id @default(uuid())
+  businessId     String    @map("business_id")
+  callId         String?   @map("call_id")
+  callerName     String?   @map("caller_name")
+  callerPhone    String    @map("caller_phone")
+  reason         String?
+  urgency        String    @default("normal")
+  status         String    @default("pending")
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([status])
+  @@map("callback_requests")
 }

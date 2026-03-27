@@ -52,5 +52,6 @@ if (db && !db.job_requests && db.jobRequest) db.job_requests  = db.jobRequest;
 if (db && !db.twilio_numbers && db.twilioNumber) db.twilio_numbers = db.twilioNumber;
 if (db && !db.oauth_tokens && db.oauthToken) db.oauth_tokens  = db.oauthToken;
 if (db && !db.sms_logs && db.smsLog)        db.sms_logs      = db.smsLog;
+if (db && !db.callback_requests && db.callbackRequest) db.callback_requests = db.callbackRequest;
 
 module.exports = db;

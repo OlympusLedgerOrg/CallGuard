@@ -463,12 +463,296 @@ function LiveCallPanel({plat,live,liveTranscript,onClose}){
   );
 }
 
+/* ── TEST MY AI PANEL ── */
+function TestMyAIPanel({plat,onClose}){
+  const ios=plat==="ios"; const ff=ios?"'DM Sans',sans-serif":"'Roboto',sans-serif";
+  const [msgs,setMsgs]=useState([]);
+  const [input,setInput]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [sessionId]=useState(()=>"test-"+Date.now());
+  const [bizType,setBizType]=useState("hvac");
+  const bottomRef=useRef(null);
+
+  useEffect(()=>{if(bottomRef.current)bottomRef.current.scrollIntoView({behavior:"smooth"});},[msgs]);
+
+  // Start session on mount
+  useEffect(()=>{
+    const start=async()=>{
+      setLoading(true);
+      if(api){
+        const r=await api.testCall(sessionId,"",bizType);
+        if(r&&r.response) setMsgs([{from:"ai",text:r.response}]);
+      } else {
+        setMsgs([{from:"ai",text:"Thanks for calling Apex HVAC & Mechanical. I'm Ava, your AI receptionist. How can I help you today?"}]);
+      }
+      setLoading(false);
+    };
+    start();
+    return()=>{if(api)api.endTestCall(sessionId);};
+  },[bizType]);
+
+  const send=async()=>{
+    const txt=input.trim();if(!txt||loading)return;
+    setInput("");
+    setMsgs(m=>[...m,{from:"caller",text:txt}]);
+    setLoading(true);
+    if(api){
+      const r=await api.testCall(sessionId,txt,bizType);
+      if(r&&r.response) setMsgs(m=>[...m,{from:"ai",text:r.response}]);
+      if(r&&r.done) setMsgs(m=>[...m,{from:"system",text:`Call ended. Disposition: ${r.disposition||"unknown"}`}]);
+    } else {
+      await new Promise(r=>setTimeout(r,500));
+      setMsgs(m=>[...m,{from:"ai",text:"I want to make sure I get the right person out to you. Can you describe what's going on?"}]);
+    }
+    setLoading(false);
+  };
+
+  return(
+    <div style={{position:"absolute",inset:0,zIndex:100,display:"flex",flexDirection:"column",background:C.bg,animation:"panelUp .38s cubic-bezier(.22,1,.36,1) both"}}>
+      <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:ios?600:500,color:C.text,fontFamily:ff}}>🧪 Test My AI</div>
+          <div style={{fontSize:11,color:C.muted,marginTop:2}}>Simulated call — no Twilio needed</div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <select value={bizType} onChange={e=>{setBizType(e.target.value);setMsgs([]);}}
+            style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 8px",color:C.text,fontSize:11,fontFamily:ff}}>
+            <option value="hvac">HVAC</option>
+            <option value="mechanic">Mechanic</option>
+          </select>
+          <button onClick={onClose} style={{background:`${C.faint}44`,border:"none",borderRadius:99,padding:"4px 12px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:ff}}>✕</button>
+        </div>
+      </div>
+      <div className="sc" style={{flex:1,overflowY:"auto",padding:"14px 16px 8px",display:"flex",flexDirection:"column",gap:10}}>
+        {msgs.map((m,i)=>(
+          <div key={i} style={{display:"flex",flexDirection:"column",alignItems:m.from==="ai"?"flex-start":m.from==="system"?"center":"flex-end",animation:"txLine .3s ease both"}}>
+            {m.from==="system"?(
+              <div style={{background:`${C.success}18`,border:`1px solid ${C.success}33`,borderRadius:10,padding:"8px 14px",fontSize:12,color:C.success,fontWeight:500}}>{m.text}</div>
+            ):(
+              <>
+                <div style={{fontSize:10,color:C.muted,marginBottom:3}}>{m.from==="ai"?"🤖 Ava AI":"👤 You (Caller)"}</div>
+                <div style={{maxWidth:"82%",background:m.from==="ai"?`${C.accent}18`:C.surface,border:`1px solid ${m.from==="ai"?C.accent+"33":C.border}`,borderRadius:m.from==="ai"?"4px 14px 14px 14px":"14px 4px 14px 14px",padding:"9px 12px"}}>
+                  <span style={{fontSize:13,color:C.text,lineHeight:1.55}}>{m.text}</span>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+        {loading&&<div style={{display:"flex",gap:3,paddingLeft:4}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:99,background:C.accent,animation:`pulse ${.8+i*.2}s ${i*.15}s ease-in-out infinite`}}/>)}</div>}
+        <div ref={bottomRef}/>
+      </div>
+      <div style={{padding:"10px 12px",borderTop:`1px solid ${C.border}`,background:C.surface,flexShrink:0}}>
+        <div style={{display:"flex",gap:8}}>
+          <input value={input} onChange={e=>setInput(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter")send();}}
+            placeholder="Say something as the caller…"
+            style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:ios?20:12,padding:"10px 14px",color:C.text,fontSize:13,fontFamily:ff,outline:"none"}}/>
+          <button onClick={send} disabled={!input.trim()||loading} className="bp"
+            style={{width:40,height:40,borderRadius:ios?99:12,background:input.trim()&&!loading?C.accent:C.faint,border:"none",cursor:input.trim()&&!loading?"pointer":"not-allowed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill={input.trim()?"#000":C.muted}><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── CALLBACK QUEUE PANEL ── */
+function CallbackQueue({plat}){
+  const ios=plat==="ios"; const ff=ios?"'DM Sans',sans-serif":"'Roboto',sans-serif";
+  const DEMO_CALLBACKS=[
+    {id:"cb1",caller_name:"Luis Fontaine",caller_phone:"+1 (910) 555-2290",reason:"Call dropped before AI answered",urgency:"normal",status:"pending",created_at:"Today 9:45 AM"},
+    {id:"cb2",caller_name:"Ray Burnett",caller_phone:"+1 (828) 555-3301",reason:"Needs price estimate for compressor replacement",urgency:"high",status:"pending",created_at:"Today 2:34 PM"},
+  ];
+  const [callbacks,setCallbacks]=useState(DEMO_CALLBACKS);
+
+  useEffect(()=>{
+    if(!api) return;
+    api.getCallbacks("demo-biz-1","pending").then(d=>{
+      if(d&&d.length) setCallbacks(d);
+    });
+  },[]);
+
+  const dismiss=(id)=>setCallbacks(c=>c.filter(x=>x.id!==id));
+  const urgColor={high:C.danger,normal:C.warn,low:C.muted};
+  const br=ios?14:10;
+
+  if(callbacks.length===0) return null;
+  return(
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:11,fontWeight:600,color:C.warn,letterSpacing:".06em",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+        <span>📋</span> CALL ME BACK QUEUE
+        <span style={{background:`${C.warn}22`,color:C.warn,fontSize:10,padding:"1px 6px",borderRadius:99,fontWeight:700}}>{callbacks.length}</span>
+      </div>
+      {callbacks.map(cb=>(
+        <div key={cb.id} style={{background:C.surface,border:`1px solid ${urgColor[cb.urgency]||C.border}44`,borderRadius:br,padding:"12px 14px",marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+            <div style={{fontSize:14,fontWeight:500,color:C.text}}>{cb.caller_name||"Unknown"}</div>
+            <span style={{fontSize:10,fontWeight:600,color:urgColor[cb.urgency]||C.muted,background:`${urgColor[cb.urgency]||C.muted}1A`,padding:"2px 7px",borderRadius:99}}>{cb.urgency}</span>
+          </div>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>{cb.caller_phone}</div>
+          {cb.reason&&<div style={{fontSize:12,color:C.muted,marginBottom:8,lineHeight:1.4}}>{cb.reason}</div>}
+          <div style={{display:"flex",gap:8}}>
+            <a href={`tel:${(cb.caller_phone||"").replace(/\D/g,"")}`}
+              style={{flex:1,padding:"8px",background:`${C.success}18`,border:`1px solid ${C.success}44`,borderRadius:br,color:C.success,fontSize:12,fontWeight:600,textAlign:"center",textDecoration:"none",cursor:"pointer"}}>
+              📞 Call Back
+            </a>
+            <button onClick={()=>dismiss(cb.id)} className="bp"
+              style={{padding:"8px 12px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:br,color:C.muted,fontSize:12,cursor:"pointer",fontFamily:ff}}>
+              ✓ Done
+            </button>
+          </div>
+          <div style={{fontSize:10,color:C.faint,marginTop:6}}>{cb.created_at}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── SCRIPT WIZARD PANEL ── */
+function ScriptWizardPanel({plat,onClose}){
+  const ios=plat==="ios"; const ff=ios?"'DM Sans',sans-serif":"'Roboto',sans-serif";
+  const br=ios?14:10;
+  const [step,setStep]=useState(0);
+  const [greeting,setGreeting]=useState("Thanks for calling {{business_name}}. I'm Ava, your AI receptionist. How can I help you today?");
+  const [questions,setQuestions]=useState(["Can you describe what's happening?","How long has this been going on?"]);
+  const [triggers,setTriggers]=useState(["speak to someone","talk to the owner","this is urgent"]);
+  const [smsConfirm,setSmsConfirm]=useState("✅ Confirmed! {{service}} on {{date}} at {{time}}. {{business_name}}. Reply CANCEL to cancel.");
+  const [smsMissed,setSmsMissed]=useState("📞 Missed call from {{caller_number}} at {{time}}. Reply to follow up.");
+  const [saved,setSaved]=useState(false);
+
+  const inputStyle={width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:ios?12:8,padding:"11px 14px",color:C.text,fontSize:13,fontFamily:ff,outline:"none"};
+
+  const save=async()=>{
+    const scripts={
+      greeting,
+      triage_questions:{general:questions.filter(q=>q.trim())},
+      escalation_triggers:triggers.filter(t=>t.trim()),
+      sms_templates:{booking_confirm:smsConfirm,missed_call:smsMissed},
+    };
+    if(api) await api.updateScripts("demo-biz-1",scripts);
+    setSaved(true);
+    setTimeout(()=>setSaved(false),2000);
+  };
+
+  const addQ=()=>setQuestions(q=>[...q,""]);
+  const updateQ=(i,v)=>setQuestions(q=>q.map((x,j)=>j===i?v:x));
+  const removeQ=(i)=>setQuestions(q=>q.filter((_,j)=>j!==i));
+  const addT=()=>setTriggers(t=>[...t,""]);
+  const updateT=(i,v)=>setTriggers(t=>t.map((x,j)=>j===i?v:x));
+  const removeT=(i)=>setTriggers(t=>t.filter((_,j)=>j!==i));
+
+  const steps=[
+    {title:"Greeting",desc:"What Ava says when answering the phone"},
+    {title:"Triage Questions",desc:"Questions to understand the caller's needs"},
+    {title:"Escalation Triggers",desc:"Phrases that trigger owner callback"},
+    {title:"SMS Templates",desc:"Auto-sent text messages"},
+  ];
+
+  return(
+    <div style={{position:"absolute",inset:0,zIndex:100,display:"flex",flexDirection:"column",background:C.bg,animation:"panelUp .38s cubic-bezier(.22,1,.36,1) both"}}>
+      <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div style={{fontSize:16,fontWeight:ios?600:500,color:C.text,fontFamily:ff}}>📝 Script Wizard</div>
+          <button onClick={onClose} style={{background:`${C.faint}44`,border:"none",borderRadius:99,padding:"4px 12px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:ff}}>✕</button>
+        </div>
+        <div style={{fontSize:12,color:C.muted}}>Step {step+1} of {steps.length} · {steps[step].title}</div>
+        <div style={{marginTop:8,height:3,background:C.border,borderRadius:99}}>
+          <div style={{width:`${((step+1)/steps.length)*100}%`,height:"100%",background:C.accent,borderRadius:99,transition:"width .4s ease"}}/>
+        </div>
+      </div>
+      <div className="sc" style={{flex:1,overflowY:"auto",padding:"14px 16px 24px"}}>
+        <div style={{fontSize:13,color:C.muted,marginBottom:14,lineHeight:1.5}}>{steps[step].desc}</div>
+
+        {step===0&&(
+          <div>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",marginBottom:8}}>GREETING MESSAGE</div>
+            <textarea value={greeting} onChange={e=>setGreeting(e.target.value)} rows={4}
+              style={{...inputStyle,resize:"none"}}/>
+            <div style={{fontSize:11,color:C.faint,marginTop:8,lineHeight:1.5}}>
+              Variables: {"{{business_name}}"} — auto-replaced with your business name
+            </div>
+          </div>
+        )}
+
+        {step===1&&(
+          <div>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",marginBottom:8}}>TRIAGE QUESTIONS</div>
+            {questions.map((q,i)=>(
+              <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                <span style={{fontSize:12,color:C.muted,flexShrink:0,width:20}}>{i+1}.</span>
+                <input value={q} onChange={e=>updateQ(i,e.target.value)} placeholder="Enter question…" style={{...inputStyle,flex:1}}/>
+                {questions.length>1&&<button onClick={()=>removeQ(i)} style={{background:"none",border:"none",color:C.danger,fontSize:16,cursor:"pointer",flexShrink:0}}>×</button>}
+              </div>
+            ))}
+            <button onClick={addQ} className="bp"
+              style={{padding:"8px 14px",background:`${C.accent}18`,border:`1px solid ${C.accent}44`,borderRadius:br,color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:ff}}>
+              + Add Question
+            </button>
+          </div>
+        )}
+
+        {step===2&&(
+          <div>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",marginBottom:8}}>ESCALATION TRIGGERS</div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:10,lineHeight:1.5}}>When a caller says any of these, Ava will escalate to you immediately.</div>
+            {triggers.map((t,i)=>(
+              <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                <input value={t} onChange={e=>updateT(i,e.target.value)} placeholder="e.g. speak to the owner" style={{...inputStyle,flex:1}}/>
+                {triggers.length>1&&<button onClick={()=>removeT(i)} style={{background:"none",border:"none",color:C.danger,fontSize:16,cursor:"pointer",flexShrink:0}}>×</button>}
+              </div>
+            ))}
+            <button onClick={addT} className="bp"
+              style={{padding:"8px 14px",background:`${C.accent}18`,border:`1px solid ${C.accent}44`,borderRadius:br,color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:ff}}>
+              + Add Trigger
+            </button>
+          </div>
+        )}
+
+        {step===3&&(
+          <div>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",marginBottom:8}}>BOOKING CONFIRMATION SMS</div>
+            <textarea value={smsConfirm} onChange={e=>setSmsConfirm(e.target.value)} rows={3}
+              style={{...inputStyle,resize:"none",marginBottom:14}}/>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",marginBottom:8}}>MISSED CALL FOLLOW-UP SMS</div>
+            <textarea value={smsMissed} onChange={e=>setSmsMissed(e.target.value)} rows={3}
+              style={{...inputStyle,resize:"none"}}/>
+            <div style={{fontSize:11,color:C.faint,marginTop:8,lineHeight:1.5}}>
+              Variables: {"{{service}}"}, {"{{date}}"}, {"{{time}}"}, {"{{business_name}}"}, {"{{caller_number}}"}
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,background:C.surface,flexShrink:0,display:"flex",gap:8}}>
+        {step>0&&(
+          <button onClick={()=>setStep(s=>s-1)} className="bp"
+            style={{padding:"12px 20px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:br,color:C.muted,fontSize:13,cursor:"pointer",fontFamily:ff}}>
+            ← Back
+          </button>
+        )}
+        {step<steps.length-1?(
+          <button onClick={()=>setStep(s=>s+1)} className="bp"
+            style={{flex:1,padding:"12px",background:C.accent,border:"none",borderRadius:br,color:"#000",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:ff}}>
+            Next →
+          </button>
+        ):(
+          <button onClick={save} className="bp"
+            style={{flex:1,padding:"12px",background:saved?C.success:C.accent,border:"none",borderRadius:br,color:"#000",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:ff,transition:"background .3s"}}>
+            {saved?"✓ Saved!":"Save Scripts"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── HOME ── */
 function HomeScreen({plat,triggerNotif}){
   const ios=plat==="ios"; const ff=ios?"'DM Sans',sans-serif":"'Roboto',sans-serif";
   const [live,setLive]=useState(null);
   const [panelOpen,setPanelOpen]=useState(false);
   const [liveTranscript,setLiveTranscript]=useState([]);
+  const [testAIOpen,setTestAIOpen]=useState(false);
 
   /* ── live stats & calls from API (fallback to mock) ── */
   const [stats,setStats]=useState(STATS);
@@ -586,6 +870,9 @@ function HomeScreen({plat,triggerNotif}){
       {panelOpen&&live&&(
         <LiveCallPanel plat={plat} live={{...live,fmt:fmt(live.s)}} liveTranscript={liveTranscript} onClose={()=>setPanelOpen(false)}/>
       )}
+      {testAIOpen&&(
+        <TestMyAIPanel plat={plat} onClose={()=>setTestAIOpen(false)}/>
+      )}
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
         {stats.map((s,i)=>(
@@ -596,6 +883,9 @@ function HomeScreen({plat,triggerNotif}){
           </div>
         ))}
       </div>
+
+      {/* ⭐ Call Me Back Queue */}
+      <CallbackQueue plat={plat}/>
 
       <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:".06em",marginBottom:10}}>RECENT CALLS</div>
       {recentCalls.map(c=>(
@@ -608,6 +898,12 @@ function HomeScreen({plat,triggerNotif}){
           <Badge s={c.s}/>
         </div>
       ))}
+
+      {/* ⭐ Test My AI Button */}
+      <button onClick={()=>setTestAIOpen(true)} className="bp"
+        style={{width:"100%",marginTop:6,padding:"13px",background:`${C.accent}14`,border:`1px solid ${C.accent}33`,borderRadius:ios?16:10,color:C.accent,fontSize:14,fontWeight:ios?600:500,fontFamily:ff,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        <span>🧪</span> Test My AI
+      </button>
 
       <button onClick={triggerNotif} className="bp"
         style={{width:"100%",marginTop:6,padding:"13px",background:`${C.success}14`,border:`1px solid ${C.success}33`,borderRadius:ios?16:10,color:C.success,fontSize:14,fontWeight:ios?600:500,fontFamily:ff,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
@@ -907,6 +1203,7 @@ function BookScreen({plat,onBooked}){
 function AccountScreen({plat}){
   const ios=plat==="ios"; const ff=ios?"'DM Sans',sans-serif":"'Roboto',sans-serif";
   const [n,setN]=useState({smsBook:true,smsCancel:true,smsRemind:true,emailWeek:false,aiSum:true});
+  const [wizardOpen,setWizardOpen]=useState(false);
   const T=({k})=>(
     <div onClick={()=>setN(x=>({...x,[k]:!x[k]}))} style={{width:44,height:26,borderRadius:99,background:n[k]?C.accent:C.faint,cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
       <div style={{position:"absolute",top:3,left:n[k]?21:3,width:20,height:20,borderRadius:99,background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.4)"}}/>
@@ -926,6 +1223,13 @@ function AccountScreen({plat}){
             <div style={{fontSize:12,color:C.accent,marginTop:4}}>Pro Plan · Renews May 1</div>
           </div>
         </div>
+
+        {/* ⭐ Script Wizard Button */}
+        <button onClick={()=>setWizardOpen(true)} className="bp"
+          style={{width:"100%",marginBottom:14,padding:"13px",background:`${C.accent}14`,border:`1px solid ${C.accent}33`,borderRadius:ios?16:10,color:C.accent,fontSize:14,fontWeight:ios?600:500,fontFamily:ff,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          <span>📝</span> Script Wizard
+        </button>
+
         <Sec title="AI RECEPTIONIST" ch={<>
           <Row l="Phone Number" r={<span style={{fontSize:13,color:C.muted}}>+1 (828) 555-0100</span>}/>
           <Row l="AI Voice" r={<span style={{fontSize:13,color:C.muted}}>Ava (Neural)</span>}/>
@@ -951,6 +1255,9 @@ function AccountScreen({plat}){
           <Row l="Sign Out" r={<span style={{fontSize:13,color:C.danger,fontWeight:500}}>Sign out</span>} last/>
         </>}/>
       </div>
+      {wizardOpen&&(
+        <ScriptWizardPanel plat={plat} onClose={()=>setWizardOpen(false)}/>
+      )}
     </div>
   );
 }
