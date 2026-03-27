@@ -19,44 +19,84 @@
   <script src="/vendor/react.production.min.js"></script>
   <script src="/vendor/react-dom.production.min.js"></script>
 
-  <!-- Babel standalone for JSX in the browser -->
-  <script src="/vendor/babel.min.js"></script>
+  <!-- API client (sets window.CallGuardAPI / window.CallGuardSocket) -->
+  <script type="module" src="/api.js"></script>
 
-  <!-- API client (non-module, sets window.CallGuardAPI / window.CallGuardSocket) -->
-  <script src="/api.js" type="text/babel" data-type="module"></script>
+  <!-- Load the precompiled dashboard bundle if available; fall back to Babel in dev -->
+  <script>
+    (function () {
+      const rootEl = document.getElementById("root");
+      const loadScript = (src, attrs = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = src;
+        Object.entries(attrs).forEach(([key, value]) => {
+          if (value === true) script.setAttribute(key, "");
+          else script.setAttribute(key, value);
+        });
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.body.appendChild(script);
+      });
 
-  <!-- The main app component -->
-  <script type="text/babel" data-type="module">
-    // api.js is loaded above – grab from window globals
-    const api = window.CallGuardAPI;
-    const connectCallSocket = window.CallGuardSocket;
-  </script>
-  <script type="text/babel" src="/callguard-app.jsx" data-type="module"></script>
+      const mountApp = () => {
+        function Boot() {
+          const AppComp = window.__CallGuardApp;
+          if (!AppComp) {
+            return React.createElement(
+              "div",
+              { style: { color: "#7A8BA8", textAlign: "center", paddingTop: "40vh", fontFamily: "DM Sans" } },
+              "Loading CallGuard…"
+            );
+          }
+          return React.createElement(AppComp);
+        }
 
-  <!-- Mount -->
-  <script type="text/babel">
-    const { useState, useEffect, useCallback, useRef } = React;
+        function Root() {
+          const [ready, setReady] = React.useState(!!window.__CallGuardApp);
+          React.useEffect(() => {
+            if (ready) return;
+            const t = setInterval(() => {
+              if (window.__CallGuardApp) {
+                setReady(true);
+                clearInterval(t);
+              }
+            }, 50);
+            return () => clearInterval(t);
+          }, [ready]);
+          return ready ? React.createElement(window.__CallGuardApp) : React.createElement(Boot);
+        }
 
-    // Wait for the app module – Babel compiles them sequentially
-    function Boot() {
-      // The JSX file sets window.__CallGuardApp via side-effect (see patched export)
-      const AppComp = window.__CallGuardApp;
-      if (!AppComp) return React.createElement('div', {style:{color:'#7A8BA8',textAlign:'center',paddingTop:'40vh',fontFamily:'DM Sans'}}, 'Loading CallGuard…');
-      return React.createElement(AppComp);
-    }
+        ReactDOM.createRoot(rootEl).render(React.createElement(Root));
+      };
 
-    // Small retry loop – Babel script compilation is async
-    function Root() {
-      const [ready, setReady] = React.useState(!!window.__CallGuardApp);
-      React.useEffect(() => {
-        if (ready) return;
-        const t = setInterval(() => { if (window.__CallGuardApp) { setReady(true); clearInterval(t); } }, 50);
-        return () => clearInterval(t);
-      }, [ready]);
-      return ready ? React.createElement(window.__CallGuardApp) : React.createElement(Boot);
-    }
+      const loadBabelFallback = async () => {
+        await loadScript("/vendor/babel.min.js");
+        loadScript("/callguard-app.jsx", {
+          type: "text/babel",
+          "data-type": "module",
+          "data-presets": "react",
+        });
+        if (window.Babel && window.Babel.transformScriptTags) {
+          window.Babel.transformScriptTags();
+        }
+      };
 
-    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Root));
+      // Use no-cache to allow caching with revalidation when deploying new versions.
+      fetch("/app.js", { cache: "no-cache", headers: { Accept: "application/javascript" } })
+        .then((res) => {
+          const contentType = (res.headers.get("content-type") || "").toLowerCase();
+          if (!res.ok || !contentType.includes("javascript")) {
+            throw new Error("Missing bundle");
+          }
+          return loadScript("/app.js");
+        })
+        .then(() => mountApp())
+        .catch(async () => {
+          console.warn("Falling back to in-browser Babel compilation.");
+          await loadBabelFallback();
+          mountApp();
+        });
+    })();
   </script>
 
   <!-- ⭐ Offline Mode: register service worker for app caching -->

@@ -2,20 +2,33 @@
  * Week 4 tests – Owner dashboard API + WebSocket for live calls.
  */
 
+process.env.DASHBOARD_JWT_SECRET = "test-dashboard-secret";
+process.env.DASHBOARD_USER = "owner";
+process.env.DASHBOARD_PASSWORD = "owner-pass";
+process.env.DASHBOARD_PASSWORD_SALT = "test-salt";
+
 const request = require("supertest");
 const http = require("http");
 const WebSocket = require("ws");
+const jwt = require("jsonwebtoken");
 const { createApp } = require("../src/index");
 const { initWebSocket } = require("../src/ws/live-calls");
 const tracker = require("../src/services/call-tracker");
 
 let app, server;
+let authHeader;
 
 beforeAll((done) => {
   app = createApp();
   server = http.createServer(app);
   initWebSocket(server);
   server.listen(0, done); // random port
+  const token = jwt.sign(
+    { sub: process.env.DASHBOARD_USER },
+    process.env.DASHBOARD_JWT_SECRET,
+    { issuer: "callguard", audience: "dashboard" }
+  );
+  authHeader = { Authorization: `Bearer ${token}` };
 });
 
 afterAll((done) => {
@@ -24,8 +37,20 @@ afterAll((done) => {
 });
 
 describe("Dashboard REST API", () => {
+  it("POST /api/auth/login returns a token with valid credentials", async () => {
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ username: process.env.DASHBOARD_USER, password: process.env.DASHBOARD_PASSWORD });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("token");
+    expect(res.body.user.username).toBe(process.env.DASHBOARD_USER);
+  });
+
   it("GET /api/dashboard/stats returns stats object", async () => {
-    const res = await request(app).get("/api/dashboard/stats");
+    const res = await request(app)
+      .get("/api/dashboard/stats")
+      .set(authHeader);
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("activeCalls");
     expect(res.body).toHaveProperty("callsThisWeek");
@@ -34,13 +59,17 @@ describe("Dashboard REST API", () => {
   });
 
   it("GET /api/dashboard/calls/active returns array", async () => {
-    const res = await request(app).get("/api/dashboard/calls/active");
+    const res = await request(app)
+      .get("/api/dashboard/calls/active")
+      .set(authHeader);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
   });
 
   it("GET /api/dashboard/calls/log returns array", async () => {
-    const res = await request(app).get("/api/dashboard/calls/log");
+    const res = await request(app)
+      .get("/api/dashboard/calls/log")
+      .set(authHeader);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
   });
@@ -48,10 +77,16 @@ describe("Dashboard REST API", () => {
   it("POST /api/dashboard/sms returns 400 without required fields", async () => {
     const res = await request(app)
       .post("/api/dashboard/sms")
+      .set(authHeader)
       .send({ to: "+15551234567" });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("Missing required fields");
+  });
+
+  it("GET /api/dashboard/stats returns 401 without auth", async () => {
+    const res = await request(app).get("/api/dashboard/stats");
+    expect(res.status).toBe(401);
   });
 });
 

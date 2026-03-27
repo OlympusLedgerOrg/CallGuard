@@ -5,16 +5,28 @@
  * TwiML builder, and new route structure.
  */
 
+process.env.DASHBOARD_JWT_SECRET = "test-dashboard-secret";
+process.env.DASHBOARD_USER = "owner";
+process.env.DASHBOARD_PASSWORD = "owner-pass";
+
 const request = require("supertest");
+const jwt = require("jsonwebtoken");
 const { createApp } = require("../src/index");
 const { processInput, endSession, getSession, GATES, matchIntent, fuzzyMatchIntent } = require("../src/dialogue/ava");
 const { buildTwiML, escapeXml } = require("../src/twilio/twiml");
 const { DEFAULT_HVAC_CONFIG, DEFAULT_MECHANIC_CONFIG } = require("../../config/businesses");
 
 let app;
+let authHeader;
 
 beforeAll(() => {
   app = createApp();
+  const token = jwt.sign(
+    { sub: process.env.DASHBOARD_USER },
+    process.env.DASHBOARD_JWT_SECRET,
+    { issuer: "callguard", audience: "dashboard" }
+  );
+  authHeader = { Authorization: `Bearer ${token}` };
 });
 
 afterEach(() => {
@@ -283,35 +295,46 @@ describe("Ava voice routes", () => {
 
 describe("Ava API routes", () => {
   it("GET /ava/api/health returns ok", async () => {
-    const res = await request(app).get("/ava/api/health");
+    const res = await request(app)
+      .get("/ava/api/health")
+      .set(authHeader);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("ok");
   });
 
   it("GET /ava/api/stats returns 400 without businessId", async () => {
-    const res = await request(app).get("/ava/api/stats");
+    const res = await request(app)
+      .get("/ava/api/stats")
+      .set(authHeader);
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("businessId");
   });
 
   it("GET /ava/api/calls returns 400 without businessId", async () => {
-    const res = await request(app).get("/ava/api/calls");
+    const res = await request(app)
+      .get("/ava/api/calls")
+      .set(authHeader);
     expect(res.status).toBe(400);
   });
 
   it("GET /ava/api/jobs returns 400 without businessId", async () => {
-    const res = await request(app).get("/ava/api/jobs");
+    const res = await request(app)
+      .get("/ava/api/jobs")
+      .set(authHeader);
     expect(res.status).toBe(400);
   });
 
   it("GET /ava/api/appointments returns 400 without businessId", async () => {
-    const res = await request(app).get("/ava/api/appointments");
+    const res = await request(app)
+      .get("/ava/api/appointments")
+      .set(authHeader);
     expect(res.status).toBe(400);
   });
 
   it("POST /ava/api/appointments returns 400 without required fields", async () => {
     const res = await request(app)
       .post("/ava/api/appointments")
+      .set(authHeader)
       .send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("required");
@@ -320,6 +343,7 @@ describe("Ava API routes", () => {
   it("POST /ava/api/calls/:callSid/sms returns 400 without required fields", async () => {
     const res = await request(app)
       .post("/ava/api/calls/CAxyz123/sms")
+      .set(authHeader)
       .send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("required");

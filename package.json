@@ -8,6 +8,7 @@
     "start": "TS_NODE_PROJECT=./server/tsconfig.json node -r ./server/node_modules/ts-node/register server/src/index.js",
     "dev": "TS_NODE_PROJECT=./server/tsconfig.json node --watch -r ./server/node_modules/ts-node/register server/src/index.js",
     "test": "cd server && npm test",
+    "build:dashboard": "cd server && npm run build:dashboard",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:generate": "prisma generate",

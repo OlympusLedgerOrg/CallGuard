@@ -8,15 +8,42 @@
  * ⭐ Offline Mode — service worker served correctly
  */
 
+process.env.DASHBOARD_JWT_SECRET = "test-dashboard-secret";
+process.env.DASHBOARD_USER = "owner";
+process.env.DASHBOARD_PASSWORD = "owner-pass";
+
+const fs = require("fs");
+const path = require("path");
 const request = require("supertest");
+const jwt = require("jsonwebtoken");
 const { createApp } = require("../src/index");
 const { processInput, endSession } = require("../src/dialogue/ava");
 const { DEFAULT_HVAC_CONFIG, DEFAULT_MECHANIC_CONFIG } = require("../../config/businesses");
 
 let app;
+let authHeader;
+let createdBundle = false;
+const bundlePath = path.join(__dirname, "../public/app.js");
 
 beforeAll(() => {
+  if (!fs.existsSync(bundlePath)) {
+    // Minimal stub to verify app.js is served when present.
+    fs.writeFileSync(bundlePath, "window.__CallGuardApp = function App() { return null; };");
+    createdBundle = true;
+  }
   app = createApp();
+  const token = jwt.sign(
+    { sub: process.env.DASHBOARD_USER },
+    process.env.DASHBOARD_JWT_SECRET,
+    { issuer: "callguard", audience: "dashboard" }
+  );
+  authHeader = { Authorization: `Bearer ${token}` };
+});
+
+afterAll(() => {
+  if (createdBundle) {
+    fs.unlinkSync(bundlePath);
+  }
 });
 
 afterEach(() => {
@@ -32,6 +59,7 @@ describe("Test My AI — simulated call API", () => {
   it("POST /ava/api/test-call starts a new session and returns greeting", async () => {
     const res = await request(app)
       .post("/ava/api/test-call")
+      .set(authHeader)
       .send({ sessionId: "test-sim-1", text: "", businessType: "hvac" });
 
     expect(res.status).toBe(200);
@@ -46,11 +74,13 @@ describe("Test My AI — simulated call API", () => {
     // Start session
     await request(app)
       .post("/ava/api/test-call")
+      .set(authHeader)
       .send({ sessionId: "test-sim-hvac", text: "", businessType: "hvac" });
 
     // Send caller input
     const res = await request(app)
       .post("/ava/api/test-call")
+      .set(authHeader)
       .send({ sessionId: "test-sim-hvac", text: "My AC is broken", businessType: "hvac" });
 
     expect(res.status).toBe(200);
@@ -61,6 +91,7 @@ describe("Test My AI — simulated call API", () => {
   it("POST /ava/api/test-call works with mechanic business type", async () => {
     const res = await request(app)
       .post("/ava/api/test-call")
+      .set(authHeader)
       .send({ sessionId: "test-sim-mech", text: "", businessType: "mechanic" });
 
     expect(res.status).toBe(200);
@@ -70,6 +101,7 @@ describe("Test My AI — simulated call API", () => {
   it("POST /ava/api/test-call returns 400 without sessionId", async () => {
     const res = await request(app)
       .post("/ava/api/test-call")
+      .set(authHeader)
       .send({ text: "hello" });
 
     expect(res.status).toBe(400);
@@ -80,10 +112,12 @@ describe("Test My AI — simulated call API", () => {
     // Start session first
     await request(app)
       .post("/ava/api/test-call")
+      .set(authHeader)
       .send({ sessionId: "test-sim-2", text: "", businessType: "hvac" });
 
     const res = await request(app)
-      .delete("/ava/api/test-call/test-sim-2");
+      .delete("/ava/api/test-call/test-sim-2")
+      .set(authHeader);
 
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
@@ -92,7 +126,8 @@ describe("Test My AI — simulated call API", () => {
 
   it("DELETE /ava/api/test-call/:sessionId handles non-existent session", async () => {
     const res = await request(app)
-      .delete("/ava/api/test-call/nonexistent");
+      .delete("/ava/api/test-call/nonexistent")
+      .set(authHeader);
 
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
@@ -104,7 +139,9 @@ describe("Test My AI — simulated call API", () => {
 
 describe("Script Wizard — dialogue script CRUD", () => {
   it("GET /ava/api/scripts returns 400 without businessId", async () => {
-    const res = await request(app).get("/ava/api/scripts");
+    const res = await request(app)
+      .get("/ava/api/scripts")
+      .set(authHeader);
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("businessId");
   });
@@ -112,6 +149,7 @@ describe("Script Wizard — dialogue script CRUD", () => {
   it("PUT /ava/api/scripts returns 400 without required fields", async () => {
     const res = await request(app)
       .put("/ava/api/scripts")
+      .set(authHeader)
       .send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("required");
@@ -120,6 +158,7 @@ describe("Script Wizard — dialogue script CRUD", () => {
   it("PUT /ava/api/scripts returns 400 without scripts field", async () => {
     const res = await request(app)
       .put("/ava/api/scripts")
+      .set(authHeader)
       .send({ businessId: "test-biz-1" });
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("required");
@@ -130,7 +169,9 @@ describe("Script Wizard — dialogue script CRUD", () => {
 
 describe("Call Me Back Queue — callback management", () => {
   it("GET /ava/api/callbacks returns 400 without businessId", async () => {
-    const res = await request(app).get("/ava/api/callbacks");
+    const res = await request(app)
+      .get("/ava/api/callbacks")
+      .set(authHeader);
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("businessId");
   });
@@ -138,6 +179,7 @@ describe("Call Me Back Queue — callback management", () => {
   it("POST /ava/api/callbacks returns 400 without required fields", async () => {
     const res = await request(app)
       .post("/ava/api/callbacks")
+      .set(authHeader)
       .send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("required");
@@ -146,6 +188,7 @@ describe("Call Me Back Queue — callback management", () => {
   it("POST /ava/api/callbacks returns 400 without callerPhone", async () => {
     const res = await request(app)
       .post("/ava/api/callbacks")
+      .set(authHeader)
       .send({ businessId: "test-biz-1" });
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("callerPhone");
@@ -154,6 +197,7 @@ describe("Call Me Back Queue — callback management", () => {
   it("PATCH /ava/api/callbacks/:id returns 400 without status", async () => {
     const res = await request(app)
       .patch("/ava/api/callbacks/test-cb-1")
+      .set(authHeader)
       .send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("status");
@@ -163,6 +207,13 @@ describe("Call Me Back Queue — callback management", () => {
 // ── Offline Mode — service worker ───────────────────────────────
 
 describe("Offline Mode — service worker", () => {
+  it("GET /app.js serves the precompiled bundle when present", async () => {
+    const res = await request(app).get("/app.js");
+    expect(res.status).toBe(200);
+    expect(res.type).toMatch(/javascript/);
+    expect(res.text).toContain("CallGuardApp");
+  });
+
   it("GET /sw.js serves the service worker", async () => {
     const res = await request(app).get("/sw.js");
     expect(res.status).toBe(200);
@@ -173,6 +224,7 @@ describe("Offline Mode — service worker", () => {
   it("Service worker caches app shell files", async () => {
     const res = await request(app).get("/sw.js");
     expect(res.text).toContain("/index.html");
+    expect(res.text).toContain("/app.js");
     expect(res.text).toContain("/callguard-app.jsx");
     expect(res.text).toContain("/api.js");
   });

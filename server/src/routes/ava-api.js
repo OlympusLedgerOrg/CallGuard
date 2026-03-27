@@ -1,7 +1,7 @@
 // src/routes/ava-api.js
 // REST API for the owner dashboard (the CallGuard mobile app).
 // All routes expect a businessId query param or header in prod.
-// Simplified auth for now — add JWT middleware before shipping.
+// JWT auth is enforced at the router mount (see server/src/index.js).
 
 const { Router } = require("express");
 const { sendMidCallInfo, sendFollowUp, sendBookingConfirm } = require("../sms/sms");
