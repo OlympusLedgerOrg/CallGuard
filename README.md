@@ -234,6 +234,7 @@ The database is designed around 8 core tables:
 - **ORM**: [Prisma](https://www.prisma.io/)
 - **Database**: SQLite (built-in, file-based — no external server needed)
 - **Voice**: Twilio (handles PSTN/SIP call routing)
+- **ASR input**: Twilio `<Gather>` by default (`SpeechResult`), plus adapter-friendly transcript fields (`transcript`, `text`, `utterance`)
 - **Dialogue**: Ava — local rule engine, regex intent matching, no LLM (zero per-call cost)
 - **Calendar**: Google Calendar API (free tier)
 - **SMS**: Twilio SMS (optional, cheap)
@@ -283,6 +284,8 @@ The database is designed around 8 core tables:
 | POST | `/ava/api/appointments` | Manual booking from the app |
 | POST | `/ava/api/calls/:callSid/sms` | Send mid-call info SMS to caller |
 | POST | `/ava/api/jobs/:id/follow-up` | Send follow-up SMS to a lead |
+
+> **Using VibeVoice (or other ASR):** Yes — CallGuard can accept transcript-first payloads, not only Twilio `SpeechResult`. If you run VibeVoice externally, post the recognized text to `/voice/respond` or `/ava/voice/input` using `transcript` (or `text` / `utterance`) with the same `CallSid`.
 
 ### WebSocket
 

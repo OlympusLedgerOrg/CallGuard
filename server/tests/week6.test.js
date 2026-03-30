@@ -270,6 +270,22 @@ describe("Ava voice routes", () => {
     expect(res.text).toContain("<Response>");
   });
 
+  it("POST /ava/voice/input accepts generic transcript payloads", async () => {
+    await request(app)
+      .post("/ava/voice/inbound")
+      .type("form")
+      .send({ CallSid: "CAxyz460", From: "+18285550142", To: "+18285550100" });
+
+    const res = await request(app)
+      .post("/ava/voice/input")
+      .type("form")
+      .send({ CallSid: "CAxyz460", transcript: "My AC is broken", From: "+18285550142", To: "+18285550100" });
+
+    expect(res.status).toBe(200);
+    expect(res.type).toMatch(/xml/);
+    expect(res.text).toContain("<Response>");
+  });
+
   it("POST /ava/voice/fallback returns re-prompt TwiML", async () => {
     const res = await request(app)
       .post("/ava/voice/fallback")

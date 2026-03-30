@@ -107,4 +107,15 @@ describe("POST /voice/respond", () => {
     expect(res.text).toContain("<Redirect");
     expect(res.text).toContain("/booking/start");
   });
+
+  it("accepts generic transcript payloads (for non-Twilio ASR adapters)", async () => {
+    const res = await request(app)
+      .post("/voice/respond")
+      .type("form")
+      .send({ CallSid: "CA-voice-4", transcript: "I want to book" });
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("<Redirect");
+    expect(res.text).toContain("/booking/start");
+  });
 });

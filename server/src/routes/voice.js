@@ -11,6 +11,7 @@ const twilioAuth = require("../middleware/twilio-auth");
 const dialogue = require("../services/dialogue");
 const tracker = require("../services/call-tracker");
 const cfg = require("../config");
+const { extractTranscriptText } = require("../utils/transcript");
 
 const router = Router();
 
@@ -21,7 +22,7 @@ const router = Router();
  */
 router.post("/respond", twilioAuth, (req, res) => {
   const callSid = req.body.CallSid || "unknown";
-  const speechResult = req.body.SpeechResult || "";
+  const speechResult = extractTranscriptText(req.body);
 
   // Record user speech in tracker
   tracker.addTranscriptTurn(callSid, "user", speechResult);

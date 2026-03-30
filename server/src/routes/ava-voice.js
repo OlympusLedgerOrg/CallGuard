@@ -23,6 +23,7 @@ const {
   pushDisposition,
 } = require("../ws/liveCall");
 const db = require("../db/client");
+const { extractTranscriptText } = require("../utils/transcript");
 
 const router = Router();
 const BASE_URL = process.env.BASE_URL || "";
@@ -101,8 +102,8 @@ router.post("/inbound", twilioAuth, async (req, res) => {
 // Twilio returns here after the caller speaks.
 // SpeechResult contains the STT transcript of what they said.
 router.post("/input", twilioAuth, async (req, res) => {
-  const { CallSid, SpeechResult, From } = req.body;
-  const callerText = (SpeechResult || "").trim();
+  const { CallSid, From } = req.body;
+  const callerText = extractTranscriptText(req.body);
 
   console.log(`[Voice] ${CallSid} caller said: "${callerText}"`);
 

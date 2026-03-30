@@ -16,6 +16,7 @@ const calendar = require("../services/calendar");
 const sms = require("../services/sms");
 const tracker = require("../services/call-tracker");
 const cfg = require("../config");
+const { extractTranscriptText } = require("../utils/transcript");
 
 const router = Router();
 
@@ -58,7 +59,7 @@ router.post("/start", twilioAuth, (req, res) => {
  */
 router.post("/collect-date", twilioAuth, (req, res) => {
   const callSid = req.body.CallSid || "unknown";
-  const service = req.body.SpeechResult || "General appointment";
+  const service = extractTranscriptText(req.body) || "General appointment";
   const session = bookingSessions.get(callSid) || {};
   session.service = service;
   bookingSessions.set(callSid, session);
@@ -89,7 +90,7 @@ router.post("/collect-date", twilioAuth, (req, res) => {
  */
 router.post("/collect-time", twilioAuth, (req, res) => {
   const callSid = req.body.CallSid || "unknown";
-  const date = req.body.SpeechResult || "next available";
+  const date = extractTranscriptText(req.body) || "next available";
   const session = bookingSessions.get(callSid) || {};
   session.date = date;
   bookingSessions.set(callSid, session);
@@ -120,7 +121,7 @@ router.post("/collect-time", twilioAuth, (req, res) => {
  */
 router.post("/confirm", twilioAuth, async (req, res) => {
   const callSid = req.body.CallSid || "unknown";
-  const time = req.body.SpeechResult || "10:00 AM";
+  const time = extractTranscriptText(req.body) || "10:00 AM";
   const callerPhone = req.body.From || "";
   const session = bookingSessions.get(callSid) || {};
   session.time = time;
