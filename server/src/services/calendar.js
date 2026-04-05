@@ -71,7 +71,9 @@ async function createEvent({ summary, description, startTime, endTime, attendeeE
   });
 
   if (hasConflict) {
-    throw new Error("TIME_SLOT_CONFLICT: This time slot is no longer available");
+    const error = new Error("This time slot is no longer available. Please select a different time.");
+    error.code = "TIME_SLOT_CONFLICT";
+    throw error;
   }
 
   // ── Create the event ───────────────────────────────────────────
