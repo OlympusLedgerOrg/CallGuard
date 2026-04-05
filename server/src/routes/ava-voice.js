@@ -23,6 +23,7 @@ const {
   pushCallStatus,
   pushDisposition,
 } = require("../ws/liveCall");
+const { persistSession, deleteSession } = require("../services/session-store");
 const db = require("../db/client");
 
 const router = Router();
@@ -88,7 +89,14 @@ router.post("/inbound", twilioAuth, async (req, res) => {
   pushCallStatus(CallSid, "ringing");
 
   // Kick off Ava — no text input on first turn (greeting gate)
-  const { action } = processInput(CallSid, "", aiConfig);
+  const { action, session: initialSession } = processInput(CallSid, "", aiConfig);
+
+  // Persist initial session
+  if (initialSession) {
+    await persistSession(CallSid, initialSession, aiConfig?.businessId).catch(err =>
+      console.error(`[Voice] Failed to persist initial session ${CallSid}:`, err.message)
+    );
+  }
 
   // Push Ava's greeting to WS
   if (action.text) {
@@ -120,6 +128,13 @@ router.post("/input", twilioAuth, async (req, res) => {
 
   const { action, session: updatedSession, done } = processInput(CallSid, callerText, aiConfig);
 
+  // Persist session after update
+  if (updatedSession) {
+    await persistSession(CallSid, updatedSession, updatedSession.bizConfig?.businessId).catch(err => 
+      console.error(`[Voice] Failed to persist session ${CallSid}:`, err.message)
+    );
+  }
+
   // Push Ava's response to WS
   if (action.text) {
     pushTranscriptLine(CallSid, { from: "ava", text: action.text, ts: Date.now() });
@@ -144,6 +159,13 @@ router.post("/fallback", twilioAuth, async (req, res) => {
 
   // Use the new processFallback which tracks attempts
   const { action, session, done, maxFallbacksReached } = processFallback(CallSid);
+
+  // Persist session after fallback update
+  if (session) {
+    await persistSession(CallSid, session, session.bizConfig?.businessId).catch(err =>
+      console.error(`[Voice] Failed to persist session ${CallSid}:`, err.message)
+    );
+  }
 
   // Push fallback event to WebSocket
   pushTranscriptLine(CallSid, {
@@ -227,6 +249,11 @@ router.post("/status", twilioAuth, async (req, res) => {
       }
 
       endSession(CallSid);
+      
+      // Delete persisted session when call ends
+      await deleteSession(CallSid).catch(err =>
+        console.error(`[Voice] Failed to delete session ${CallSid}:`, err.message)
+      );
     }
   } catch (err) {
     console.error("[Voice] status handler error:", err.message);
