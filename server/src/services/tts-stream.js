@@ -99,8 +99,8 @@ class ElevenLabsTTSStream {
 
       this.ws.on("message", (data, isBinary) => {
         if (isBinary) {
-          // Binary audio data
-          if (Buffer.isBuffer(data) && data.length > 0) {
+          // Binary audio data - isBinary guarantees this is audio content
+          if (data.length > 0) {
             this.onAudioChunk(data);
           }
           return;
