@@ -53,5 +53,6 @@ if (db && !db.twilio_numbers && db.twilioNumber) db.twilio_numbers = db.twilioNu
 if (db && !db.oauth_tokens && db.oauthToken) db.oauth_tokens  = db.oauthToken;
 if (db && !db.sms_logs && db.smsLog)        db.sms_logs      = db.smsLog;
 if (db && !db.callback_requests && db.callbackRequest) db.callback_requests = db.callbackRequest;
+if (db && !db.active_sessions && db.activeSession) db.active_sessions = db.activeSession;
 
 module.exports = db;

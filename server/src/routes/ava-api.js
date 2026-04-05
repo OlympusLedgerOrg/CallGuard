@@ -342,7 +342,7 @@ router.patch("/callbacks/:id", async (req, res) => {
   if (!status) return res.status(400).json({ error: "status required" });
 
   try {
-    const callback = await db.callbackRequests.update({
+    const callback = await db.callback_requests.update({
       where: { id: req.params.id },
       data: { status, ...(notes !== undefined ? { notes } : {}) },
     });

@@ -160,7 +160,7 @@ router.post("/fallback", twilioAuth, async (req, res) => {
     try {
       const call = await db.calls.findFirst({ where: { twilioCallSid: CallSid } });
       if (call) {
-        await db.callbackRequests.create({
+        await db.callback_requests.create({
           data: {
             businessId: call.businessId,
             callId: call.id,

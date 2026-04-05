@@ -26,7 +26,7 @@ async function persistSession(callSid, session, businessId) {
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
     const sessionData = JSON.stringify(session);
 
-    await db.activeSessions.upsert({
+    await db.active_sessions.upsert({
       where: { callSid },
       create: {
         callSid,
@@ -49,7 +49,7 @@ async function persistSession(callSid, session, businessId) {
 // ── Load a session from SQLite ───────────────────────────────────
 async function loadSession(callSid) {
   try {
-    const record = await db.activeSessions.findUnique({
+    const record = await db.active_sessions.findUnique({
       where: { callSid },
     });
 
@@ -71,7 +71,7 @@ async function loadSession(callSid) {
 // ── Delete a session ─────────────────────────────────────────────
 async function deleteSession(callSid) {
   try {
-    await db.activeSessions.delete({
+    await db.active_sessions.delete({
       where: { callSid },
     });
   } catch (err) {
@@ -85,7 +85,7 @@ async function deleteSession(callSid) {
 // ── Get all active sessions (for recovery) ───────────────────────
 async function getAllActiveSessions() {
   try {
-    const records = await db.activeSessions.findMany({
+    const records = await db.active_sessions.findMany({
       where: {
         expiresAt: { gt: new Date() },
       },
@@ -107,7 +107,7 @@ async function getAllActiveSessions() {
 // ── Cleanup expired sessions ─────────────────────────────────────
 async function cleanupExpiredSessions() {
   try {
-    const result = await db.activeSessions.deleteMany({
+    const result = await db.active_sessions.deleteMany({
       where: {
         expiresAt: { lt: new Date() },
       },

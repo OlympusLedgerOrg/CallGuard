@@ -71,9 +71,13 @@ class DeepgramSTTStream {
         resolve(true);
       });
 
-      this.ws.on("message", (data) => {
+      this.ws.on("message", (data, isBinary) => {
         try {
-          const msg = JSON.parse(data);
+          if (isBinary) {
+            return; // Ignore binary frames
+          }
+          const payload = Buffer.isBuffer(data) ? data.toString("utf8") : data;
+          const msg = JSON.parse(payload);
           this._handleMessage(msg);
         } catch (err) {
           console.error("[STT] Parse error:", err.message);

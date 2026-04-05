@@ -255,9 +255,14 @@ function attachMediaStreamServer(httpServer, path = "/media-stream") {
 
     console.log(`[MediaStream] New connection from ${req.socket.remoteAddress}`);
 
-    ws.on("message", async (data) => {
+    ws.on("message", async (data, isBinary) => {
       try {
-        const msg = JSON.parse(data);
+        if (isBinary) {
+          return; // Ignore binary frames
+        }
+
+        const payload = Buffer.isBuffer(data) ? data.toString("utf8") : data;
+        const msg = JSON.parse(payload);
 
         switch (msg.event) {
           case "connected":
@@ -339,7 +344,7 @@ async function loadBizConfigFromDB(toNumber) {
   
   try {
     if (toNumber) {
-      const tn = await db.twilioNumbers.findUnique({
+      const tn = await db.twilio_numbers.findUnique({
         where: { phoneNumber: toNumber },
         include: { business: true },
       });
@@ -387,7 +392,7 @@ function resumeMediaStream(callSid) {
 
 // ── Check if VibeVoice is available ──────────────────────────────
 function isVibeVoiceAvailable() {
-  return isStreamingSTTAvailable() || isStreamingTTSAvailable();
+  return isStreamingSTTAvailable() && isStreamingTTSAvailable();
 }
 
 module.exports = {

@@ -31,8 +31,11 @@ function getCalendar() {
  */
 async function getBusySlots(dateStr, timezone = "America/New_York") {
   const cal = getCalendar();
-  const timeMin = new Date(`${dateStr}T00:00:00`).toISOString();
-  const timeMax = new Date(`${dateStr}T23:59:59`).toISOString();
+  
+  // Construct timestamps in the target timezone
+  // Google Calendar API accepts date strings without Z suffix and uses timeZone field
+  const timeMin = `${dateStr}T00:00:00`;
+  const timeMax = `${dateStr}T23:59:59`;
 
   const res = await cal.freebusy.query({
     requestBody: {
