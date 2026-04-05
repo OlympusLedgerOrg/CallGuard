@@ -32,8 +32,9 @@ function getCalendar() {
 async function getBusySlots(dateStr, timezone = "America/New_York") {
   const cal = getCalendar();
   
-  // Construct timestamps in the target timezone
-  // Google Calendar API accepts date strings without Z suffix and uses timeZone field
+  // Construct local time strings without UTC conversion
+  // The timeZone field (line 44) tells the Google Calendar API to interpret
+  // these timestamps as local times in the specified timezone rather than UTC
   const timeMin = `${dateStr}T00:00:00`;
   const timeMax = `${dateStr}T23:59:59`;
 

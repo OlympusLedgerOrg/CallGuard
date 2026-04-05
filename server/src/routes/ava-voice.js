@@ -94,7 +94,7 @@ router.post("/inbound", twilioAuth, async (req, res) => {
   // Persist initial session
   if (initialSession) {
     await persistSession(CallSid, initialSession, aiConfig?.businessId).catch(err =>
-      console.error(`[Voice] Failed to persist initial session ${CallSid}:`, err.message)
+      console.error("[Voice] Failed to persist initial session:", CallSid, err.message)
     );
   }
 
@@ -131,7 +131,7 @@ router.post("/input", twilioAuth, async (req, res) => {
   // Persist session after update
   if (updatedSession) {
     await persistSession(CallSid, updatedSession, updatedSession.bizConfig?.businessId).catch(err => 
-      console.error(`[Voice] Failed to persist session ${CallSid}:`, err.message)
+      console.error("[Voice] Failed to persist updated session:", CallSid, err.message)
     );
   }
 
@@ -163,7 +163,7 @@ router.post("/fallback", twilioAuth, async (req, res) => {
   // Persist session after fallback update
   if (session) {
     await persistSession(CallSid, session, session.bizConfig?.businessId).catch(err =>
-      console.error(`[Voice] Failed to persist session ${CallSid}:`, err.message)
+      console.error("[Voice] Failed to persist session after fallback:", CallSid, err.message)
     );
   }
 
@@ -252,7 +252,7 @@ router.post("/status", twilioAuth, async (req, res) => {
       
       // Delete persisted session when call ends
       await deleteSession(CallSid).catch(err =>
-        console.error(`[Voice] Failed to delete session ${CallSid}:`, err.message)
+        console.error("[Voice] Failed to delete session:", CallSid, err.message)
       );
     }
   } catch (err) {
