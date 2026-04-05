@@ -19,6 +19,9 @@ const { requireDashboardAuth } = require("./middleware/dashboard-auth");
 const avaVoiceRoutes = require("./routes/ava-voice");
 const avaApiRoutes   = require("./routes/ava-api");
 const { attachWebSocketServer } = require("./ws/liveCall");
+const { attachMediaStreamServer, isVibeVoiceAvailable } = require("./ws/mediaStream");
+const { startCleanupTimer, recoverSessions } = require("./services/session-store");
+const { restoreSession } = require("./dialogue/ava");
 const db = require("./db/client");
 
 function createApp() {
@@ -130,29 +133,39 @@ function startServer() {
   // Ava live call WebSocket (enhanced — /ws with call rooms)
   attachWebSocketServer(server);
 
+  // VibeVoice — Media Streams for real-time voice AI
+  if (cfg.vibeVoiceEnabled) {
+    attachMediaStreamServer(server, "/media-stream");
+  }
+
   server.listen(cfg.port, async () => {
+    const vibeVoiceStatus = cfg.vibeVoiceEnabled && isVibeVoiceAvailable() 
+      ? "✅ ENABLED" 
+      : "⚠️  Disabled (set DEEPGRAM_API_KEY + ELEVENLABS_API_KEY)";
+
     console.log(`
 ╔═══════════════════════════════════════════════════╗
-║   CallGuard · Ava Backend · v2.0                  ║
+║   CallGuard · Ava + VibeVoice · v3.0              ║
 ╠═══════════════════════════════════════════════════╣
 ║   HTTP  →  http://localhost:${cfg.port}                  ║
 ║   WS    →  ws://localhost:${cfg.port}/ws                 ║
+║   Media →  ws://localhost:${cfg.port}/media-stream       ║
 ╠═══════════════════════════════════════════════════╣
-║   Original routes:                                ║
-║     POST /twilio/voice    ← Twilio webhook        ║
-║     POST /voice/respond   ← dialogue round-trip   ║
-║     /booking/*            ← booking flow          ║
-║     /api/dashboard/*      ← dashboard API         ║
+║   VibeVoice (Real-Time Streaming Voice AI):       ║
+║     ${vibeVoiceStatus.padEnd(45)}║
 ╠═══════════════════════════════════════════════════╣
-║   Ava engine routes:                              ║
+║   Voice routes:                                   ║
 ║     POST /ava/voice/inbound  ← new call           ║
 ║     POST /ava/voice/input    ← caller spoke       ║
+║     POST /ava/voice/fallback ← no speech (3x max) ║
+║     POST /ava/voice/takeover ← owner takes over   ║
 ║     POST /ava/voice/status   ← call lifecycle     ║
-║     GET  /ava/api/stats      ← home screen stats  ║
-║     GET  /ava/api/calls      ← call history       ║
-║     GET  /ava/api/jobs       ← job requests       ║
-║     GET  /ava/api/appointments ← calendar         ║
-║     POST /ava/api/calls/:sid/sms ← mid-call SMS   ║
+╠═══════════════════════════════════════════════════╣
+║   API routes:                                     ║
+║     GET  /ava/api/stats         ← home stats      ║
+║     GET  /ava/api/calls         ← call history    ║
+║     GET  /ava/api/analytics     ← call analytics  ║
+║     GET  /ava/api/vibevoice/status ← VibeVoice    ║
 ╚═══════════════════════════════════════════════════╝
     `);
 
@@ -177,6 +190,20 @@ function startServer() {
         }
       }
       console.log("✅ Database connected");
+
+      // Start session cleanup timer
+      startCleanupTimer();
+
+      // Recover any active sessions from previous server instance
+      try {
+        const recovered = await recoverSessions(restoreSession);
+        if (recovered > 0) {
+          console.log(`✅ Recovered ${recovered} active call sessions`);
+        }
+      } catch (err) {
+        console.warn("⚠️  Session recovery skipped:", err.message);
+      }
+
     } catch (err) {
       console.error("❌ Database connection failed:", err.message);
       console.error("   Server will run without database — UI still works");
@@ -190,6 +217,8 @@ function startServer() {
 /* istanbul ignore next */
 process.on("SIGTERM", async () => {
   console.log("Shutting down...");
+  const { stopCleanupTimer } = require("./services/session-store");
+  stopCleanupTimer();
   try { await db.$disconnect(); } catch {}
   process.exit(0);
 });

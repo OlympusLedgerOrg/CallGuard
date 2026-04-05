@@ -6,10 +6,11 @@
 //   POST /voice/input     — caller has spoken, STT result comes back
 //   POST /voice/fallback  — Ava timed out waiting for input
 //   POST /voice/status    — call lifecycle events (completed, busy, failed)
+//   POST /voice/takeover  — owner takes over the call (TwiML endpoint)
 
 const { Router } = require("express");
-const { processInput, endSession, getSession } = require("../dialogue/ava");
-const { buildTwiML } = require("../twilio/twiml");
+const { processInput, processFallback, endSession, getSession, setSessionPaused } = require("../dialogue/ava");
+const { buildTwiML, buildOwnerTakeoverTwiML } = require("../twilio/twiml");
 const { DEFAULT_HVAC_CONFIG } = require("../../../config/businesses");
 const twilioAuth = require("../middleware/twilio-auth");
 const {
@@ -136,22 +137,64 @@ router.post("/input", twilioAuth, async (req, res) => {
 });
 
 // ── POST /voice/fallback ─────────────────────────────────────────
-// Caller didn't respond in time — Ava re-prompts or logs as missed
+// Caller didn't respond in time — Ava re-prompts or transfers after 3 attempts
 router.post("/fallback", twilioAuth, async (req, res) => {
-  const { CallSid } = req.body;
+  const { CallSid, From } = req.body;
   console.log(`[Voice] ${CallSid} fallback (no speech detected)`);
 
-  const twiml = buildTwiML(
-    {
-      type: "gather",
-      text: "I'm sorry, I didn't catch that. How can I help you today?",
-      hints: "appointment, repair, price, emergency, hours",
-    },
-    BASE_URL,
-    CallSid
-  );
+  // Use the new processFallback which tracks attempts
+  const { action, session, done, maxFallbacksReached } = processFallback(CallSid);
 
-  res.type("text/xml").send(twiml);
+  // Push fallback event to WebSocket
+  pushTranscriptLine(CallSid, {
+    from: "system",
+    text: `[Fallback ${session?.fallbackCount || 1}/3]`,
+    ts: Date.now(),
+  });
+
+  // If max fallbacks reached, handle call end and create callback request
+  if (maxFallbacksReached && session) {
+    await handleCallEnd(CallSid, session, From, req.body.To);
+    
+    // Create callback request for STT failures
+    try {
+      const call = await db.calls.findFirst({ where: { twilioCallSid: CallSid } });
+      if (call) {
+        await db.callbackRequests.create({
+          data: {
+            businessId: call.businessId,
+            callId: call.id,
+            callerPhone: From,
+            reason: "STT failure - caller could not be heard",
+            urgency: "normal",
+            status: "pending",
+          },
+        });
+      }
+    } catch (err) {
+      console.error("[Voice] callback request error:", err.message);
+    }
+  }
+
+  res.type("text/xml").send(buildTwiML(action, BASE_URL, CallSid));
+});
+
+// ── POST /voice/takeover ─────────────────────────────────────────
+// Owner takes over the call — redirect caller to conference
+router.post("/takeover", twilioAuth, async (req, res) => {
+  const { CallSid } = req.body;
+  console.log(`[Voice] ${CallSid} owner takeover requested`);
+
+  // Pause Ava processing
+  setSessionPaused(CallSid, true);
+
+  // Generate conference room name
+  const conferenceRoom = `owner-takeover-${CallSid}`;
+
+  // Push event to WebSocket
+  pushCallStatus(CallSid, "owner_live");
+
+  res.type("text/xml").send(buildOwnerTakeoverTwiML(CallSid, conferenceRoom));
 });
 
 // ── POST /voice/status ───────────────────────────────────────────
@@ -167,6 +210,8 @@ router.post("/status", twilioAuth, async (req, res) => {
     if (!call) return res.sendStatus(200);
 
     if (["completed", "busy", "no-answer", "failed", "canceled"].includes(CallStatus)) {
+      const session = getSession(CallSid);
+      
       await db.calls.update({
         where: { id: call.id },
         data: {
@@ -176,8 +221,7 @@ router.post("/status", twilioAuth, async (req, res) => {
       });
 
       // If call ended with no booking — fire missed call alert
-      const session = getSession(CallSid);
-      if (session && ["lead", null].includes(session.disposition)) {
+      if (session && ["lead", null, "stt_failure"].includes(session.disposition)) {
         const business = await db.businesses.findUnique({ where: { id: call.businessId } });
         if (business) await sendMissedCallAlert({ business, call });
       }

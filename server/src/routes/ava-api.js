@@ -342,7 +342,7 @@ router.patch("/callbacks/:id", async (req, res) => {
   if (!status) return res.status(400).json({ error: "status required" });
 
   try {
-    const callback = await db.callback_requests.update({
+    const callback = await db.callbackRequests.update({
       where: { id: req.params.id },
       data: { status, ...(notes !== undefined ? { notes } : {}) },
     });
@@ -350,6 +350,188 @@ router.patch("/callbacks/:id", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// VibeVoice Analytics
+// ══════════════════════════════════════════════════════════════════
+
+// ── GET /api/analytics ───────────────────────────────────────────
+// Dashboard analytics for call performance, intents, and missed phrases.
+router.get("/analytics", async (req, res) => {
+  const { businessId, days = "7" } = req.query;
+  if (!businessId) return res.status(400).json({ error: "businessId required" });
+
+  const daysAgo = new Date(Date.now() - parseInt(days, 10) * 24 * 60 * 60 * 1000);
+
+  try {
+    // Get call stats with analytics
+    const calls = await db.calls.findMany({
+      where: {
+        businessId,
+        createdAt: { gte: daysAgo },
+      },
+      include: {
+        analytics: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Aggregate intent distribution
+    const intentCounts = {};
+    const missedPhrases = [];
+    let totalTurns = 0;
+    let turnsToBookingSum = 0;
+    let turnsToBookingCount = 0;
+    let fallbackTotal = 0;
+    let vibeVoiceCallCount = 0;
+
+    for (const call of calls) {
+      totalTurns += call.turnCount || 0;
+      fallbackTotal += call.fallbackCount || 0;
+      if (call.vibeVoiceUsed) vibeVoiceCallCount++;
+
+      if (call.analytics) {
+        // Parse detected intents
+        try {
+          const intents = JSON.parse(call.analytics.detectedIntents || "[]");
+          for (const intent of intents) {
+            intentCounts[intent] = (intentCounts[intent] || 0) + 1;
+          }
+        } catch {}
+
+        // Collect missed phrases
+        try {
+          const missed = JSON.parse(call.analytics.missedPhrases || "[]");
+          missedPhrases.push(...missed.slice(0, 5)); // Limit per call
+        } catch {}
+
+        // Turns to booking
+        if (call.analytics.turnsToBooking) {
+          turnsToBookingSum += call.analytics.turnsToBooking;
+          turnsToBookingCount++;
+        }
+      }
+    }
+
+    // Sort intents by frequency
+    const intentDistribution = Object.entries(intentCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([intent, count]) => ({ intent, count }));
+
+    // Get top missed phrases
+    const phraseCounts = {};
+    for (const phrase of missedPhrases) {
+      const normalized = phrase.toLowerCase().trim();
+      phraseCounts[normalized] = (phraseCounts[normalized] || 0) + 1;
+    }
+    const topMissedPhrases = Object.entries(phraseCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([phrase, count]) => ({ phrase, count }));
+
+    // Calculate disposition breakdown
+    const dispositionCounts = {};
+    for (const call of calls) {
+      const d = call.disposition || "unknown";
+      dispositionCounts[d] = (dispositionCounts[d] || 0) + 1;
+    }
+
+    res.json({
+      period_days: parseInt(days, 10),
+      total_calls: calls.length,
+      vibevoice_calls: vibeVoiceCallCount,
+      vibevoice_pct: calls.length > 0 ? Math.round((vibeVoiceCallCount / calls.length) * 100) : 0,
+      avg_turns_per_call: calls.length > 0 ? Math.round(totalTurns / calls.length * 10) / 10 : 0,
+      avg_turns_to_booking: turnsToBookingCount > 0 ? Math.round(turnsToBookingSum / turnsToBookingCount * 10) / 10 : null,
+      total_fallbacks: fallbackTotal,
+      fallback_rate: calls.length > 0 ? Math.round((fallbackTotal / calls.length) * 100) / 100 : 0,
+      intent_distribution: intentDistribution,
+      top_missed_phrases: topMissedPhrases,
+      disposition_breakdown: dispositionCounts,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/analytics/intents ───────────────────────────────────
+// Detailed intent analytics for improving the dialogue engine.
+router.get("/analytics/intents", async (req, res) => {
+  const { businessId, days = "30" } = req.query;
+  if (!businessId) return res.status(400).json({ error: "businessId required" });
+
+  const daysAgo = new Date(Date.now() - parseInt(days, 10) * 24 * 60 * 60 * 1000);
+
+  try {
+    const analytics = await db.callAnalytics.findMany({
+      where: {
+        call: {
+          businessId,
+          createdAt: { gte: daysAgo },
+        },
+      },
+      include: {
+        call: {
+          select: {
+            disposition: true,
+            serviceType: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    // Build intent → outcome mapping
+    const intentOutcomes = {};
+
+    for (const a of analytics) {
+      try {
+        const intents = JSON.parse(a.detectedIntents || "[]");
+        for (const intent of intents) {
+          if (!intentOutcomes[intent]) {
+            intentOutcomes[intent] = { booked: 0, lead: 0, callback: 0, other: 0 };
+          }
+          const d = a.call?.disposition || "other";
+          if (d === "booked") intentOutcomes[intent].booked++;
+          else if (d === "lead") intentOutcomes[intent].lead++;
+          else if (d === "callback") intentOutcomes[intent].callback++;
+          else intentOutcomes[intent].other++;
+        }
+      } catch {}
+    }
+
+    res.json({
+      period_days: parseInt(days, 10),
+      intent_outcomes: intentOutcomes,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/vibevoice/status ────────────────────────────────────
+// Check VibeVoice availability and configuration.
+router.get("/vibevoice/status", (req, res) => {
+  const { isVibeVoiceAvailable } = require("../ws/mediaStream");
+  const { isStreamingSTTAvailable } = require("../services/stt-stream");
+  const { isStreamingTTSAvailable, getVoicePresets } = require("../services/tts-stream");
+  const cfg = require("../config");
+
+  res.json({
+    enabled: cfg.vibeVoiceEnabled,
+    available: isVibeVoiceAvailable(),
+    stt: {
+      provider: "deepgram",
+      available: isStreamingSTTAvailable(),
+    },
+    tts: {
+      provider: "elevenlabs",
+      available: isStreamingTTSAvailable(),
+      presets: getVoicePresets(),
+    },
+  });
 });
 
 // ── GET /api/health ───────────────────────────────────────────────

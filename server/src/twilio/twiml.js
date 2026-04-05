@@ -1,13 +1,21 @@
 // src/twilio/twiml.js
 // Converts Ava dialogue actions into TwiML XML that Twilio executes.
 // Twilio calls your webhook, you return this XML, Twilio speaks + listens.
+//
+// VibeVoice: When streaming is enabled, uses <Stream> for real-time audio.
 
 const VOICE = "Polly.Joanna"; // AWS Polly via Twilio — natural female voice, no extra cost
 const LANGUAGE = "en-US";
 
 // Build a full TwiML response string from an Ava action object
-function buildTwiML(action, webhookBase, callSid) {
+function buildTwiML(action, webhookBase, callSid, options = {}) {
   const callbackUrl = `${webhookBase}/voice/input?callSid=${encodeURIComponent(callSid)}`;
+  const { useStreaming = false, streamUrl = null } = options;
+
+  // VibeVoice: Use Media Streams for real-time voice
+  if (useStreaming && streamUrl && action.type !== "hangup") {
+    return buildStreamingTwiML(action, streamUrl, callSid);
+  }
 
   if (action.type === "gather") {
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -61,11 +69,66 @@ function buildTwiML(action, webhookBase, callSid) {
 </Response>`;
   }
 
+  if (action.type === "transfer") {
+    // Transfer call to owner's phone
+    const transferNum = action.number || "";
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="${VOICE}">${escapeXml(action.text || "Connecting you now.")}</Say>
+  <Dial callerId="${escapeXml(action.callerId || "")}">
+    <Number>${escapeXml(transferNum)}</Number>
+  </Dial>
+</Response>`;
+  }
+
   // Fallback — silence + hangup
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Pause length="1"/>
   <Hangup/>
+</Response>`;
+}
+
+// VibeVoice: Build TwiML with Media Streams for real-time voice
+function buildStreamingTwiML(action, streamUrl, callSid) {
+  // Connect to VibeVoice WebSocket for bidirectional audio
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="${escapeXml(streamUrl)}">
+      <Parameter name="callSid" value="${escapeXml(callSid)}" />
+    </Stream>
+  </Connect>
+</Response>`;
+}
+
+// Build TwiML for owner takeover — redirect to conference
+function buildOwnerTakeoverTwiML(callSid, conferenceRoom) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="${VOICE}">The owner is joining now.</Say>
+  <Dial>
+    <Conference
+      startConferenceOnEnter="true"
+      endConferenceOnExit="true"
+      record="record-from-start"
+      waitUrl=""
+    >${escapeXml(conferenceRoom)}</Conference>
+  </Dial>
+</Response>`;
+}
+
+// Build TwiML to dial the owner into the call
+function buildDialOwnerTwiML(ownerPhone, conferenceRoom, callerId) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial callerId="${escapeXml(callerId)}">
+    <Conference
+      startConferenceOnEnter="true"
+      endConferenceOnExit="false"
+      beep="false"
+    >${escapeXml(conferenceRoom)}</Conference>
+  </Dial>
 </Response>`;
 }
 
@@ -79,4 +142,10 @@ function escapeXml(str = "") {
     .replace(/'/g, "&apos;");
 }
 
-module.exports = { buildTwiML, escapeXml };
+module.exports = {
+  buildTwiML,
+  buildStreamingTwiML,
+  buildOwnerTakeoverTwiML,
+  buildDialOwnerTwiML,
+  escapeXml,
+};

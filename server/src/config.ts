@@ -13,6 +13,10 @@ interface Config {
   googlePrivateKey: string;
   googleCalendarId: string;
   openaiApiKey: string;
+  // VibeVoice streaming voice AI
+  deepgramApiKey: string;
+  elevenlabsApiKey: string;
+  vibeVoiceEnabled: boolean;
 }
 
 const parsedPort = Number.parseInt(process.env.PORT ?? "", 10);
@@ -33,6 +37,12 @@ const cfg: Config = {
 
   // OpenAI (for dialogue engine)
   openaiApiKey: process.env.OPENAI_API_KEY || "",
+
+  // VibeVoice — Real-time streaming voice AI
+  deepgramApiKey: process.env.DEEPGRAM_API_KEY || "",
+  elevenlabsApiKey: process.env.ELEVENLABS_API_KEY || "",
+  vibeVoiceEnabled: process.env.VIBEVOICE_ENABLED === "true" || 
+    !!(process.env.DEEPGRAM_API_KEY && process.env.ELEVENLABS_API_KEY),
 };
 
 export = cfg;

@@ -81,14 +81,64 @@ model Call {
   aiHandled       Boolean  @default(false) @map("ai_handled")
   jobRequestId    String?  @map("job_request_id")
 
+  // VibeVoice analytics
+  fallbackCount     Int     @default(0) @map("fallback_count")
+  missedIntentCount Int     @default(0) @map("missed_intent_count")
+  turnCount         Int     @default(0) @map("turn_count")
+  vibeVoiceUsed     Boolean @default(false) @map("vibevoice_used")
+
   business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   transcript  Transcript?
   appointment Appointment? @relation("CallAppointment", fields: [appointmentId], references: [id], onDelete: SetNull)
   smsLogs     SmsLog[]
+  analytics   CallAnalytics?
 
   @@index([businessId])
   @@index([createdAt])
   @@map("calls")
+}
+
+// ─── Call Analytics ───────────────────────────────────────────────────────────
+// Detailed analytics for each call — intent tracking, missed phrases, timing.
+model CallAnalytics {
+  id              String   @id @default(uuid())
+  callId          String   @unique @map("call_id")
+  
+  // Intent tracking
+  detectedIntents String   @default("[]") @map("detected_intents")  // JSON array
+  missedPhrases   String   @default("[]") @map("missed_phrases")    // JSON array
+  
+  // Timing metrics
+  avgResponseMs   Int?     @map("avg_response_ms")
+  firstResponseMs Int?     @map("first_response_ms")
+  totalTurns      Int      @default(0) @map("total_turns")
+  turnsToBooking  Int?     @map("turns_to_booking")
+  
+  // Gate progression
+  gateProgression String   @default("[]") @map("gate_progression")  // JSON array
+  finalGate       String?  @map("final_gate")
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@map("call_analytics")
+}
+
+// ─── Active Sessions ──────────────────────────────────────────────────────────
+// Persisted call sessions for recovery after server restart.
+model ActiveSession {
+  id          String   @id @default(uuid())
+  callSid     String   @unique @map("call_sid")
+  businessId  String   @map("business_id")
+  sessionData String   @map("session_data")  // JSON serialized session
+  gate        String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+  expiresAt   DateTime @map("expires_at")
+
+  @@index([expiresAt])
+  @@map("active_sessions")
 }
 
 // ─── Transcripts ──────────────────────────────────────────────────────────────

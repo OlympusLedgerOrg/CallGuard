@@ -223,10 +223,28 @@ function processInput(callSid, rawText, bizConfig) {
       customer_phone: null,
       disposition: null,
       transcript: [],
+      // VibeVoice additions
+      paused: false,
+      fallbackCount: 0,
+      missedIntentCount: 0,
+      turnCount: 0,
+      createdAt: Date.now(),
     });
   }
 
   const session = sessions.get(callSid);
+
+  // If session is paused (owner takeover), don't process
+  if (session.paused) {
+    return {
+      action: { type: "paused", text: null },
+      session: { ...session },
+      done: false,
+    };
+  }
+
+  // Increment turn count
+  session.turnCount++;
 
   // Log caller turn
   if (text) {
@@ -244,6 +262,64 @@ function processInput(callSid, rawText, bizConfig) {
     action: response,       // { type: "say"|"gather"|"hangup", text, hints }
     session: { ...session }, // current state snapshot for DB write
     done: session.gate === GATES.END,
+  };
+}
+
+// ── Fallback handler (no speech detected) ────────────────────────
+function processFallback(callSid) {
+  const session = sessions.get(callSid);
+  if (!session) {
+    return {
+      action: {
+        type: "gather",
+        text: "I'm sorry, I didn't catch that. How can I help you today?",
+        hints: "appointment, repair, price, emergency, hours",
+      },
+      session: null,
+      done: false,
+      maxFallbacksReached: false,
+    };
+  }
+
+  // Increment fallback count
+  session.fallbackCount++;
+
+  // Max fallbacks reached — transfer to callback queue
+  if (session.fallbackCount >= 3) {
+    session.gate = GATES.END;
+    session.disposition = "stt_failure";
+    return {
+      action: {
+        type: "hangup",
+        text: "I'm having trouble hearing you. I'll have someone from the team call you back. Thanks for calling!",
+      },
+      session: { ...session },
+      done: true,
+      maxFallbacksReached: true,
+    };
+  }
+
+  // Re-prompt based on current gate
+  const prompts = {
+    [GATES.TRIAGE]: "I didn't quite catch that. What can we help you with today?",
+    [GATES.LOGISTICS]: "Sorry, I missed that. What's the address for the service call?",
+    [GATES.OFFER]: "I didn't hear your response. Would you like the first or second time slot?",
+    [GATES.CAPTURE]: "I couldn't hear that. Could you repeat your name or phone number?",
+    [GATES.LEAD]: "Sorry, I missed that. What's the best number to reach you?",
+    [GATES.CALLBACK]: "I didn't catch your name. Could you say it again?",
+  };
+
+  const text = prompts[session.gate] || "I'm sorry, I didn't catch that. How can I help you today?";
+
+  return {
+    action: {
+      type: "gather",
+      text,
+      hints: "appointment, repair, price, emergency, hours, name, phone number",
+    },
+    session: { ...session },
+    done: false,
+    maxFallbacksReached: false,
   };
 }
 
@@ -559,4 +635,46 @@ function getSession(callSid) {
   return sessions.get(callSid);
 }
 
-module.exports = { processInput, endSession, getSession, GATES, matchIntent, fuzzyMatchIntent };
+// ── Pause/resume session (for owner takeover) ─────────────────────
+function setSessionPaused(callSid, paused) {
+  const session = sessions.get(callSid);
+  if (session) {
+    session.paused = paused;
+    return true;
+  }
+  return false;
+}
+
+function isSessionPaused(callSid) {
+  const session = sessions.get(callSid);
+  return session?.paused || false;
+}
+
+// ── Get all active sessions (for recovery) ────────────────────────
+function getAllSessions() {
+  return Array.from(sessions.entries()).map(([callSid, session]) => ({
+    callSid,
+    gate: session.gate,
+    disposition: session.disposition,
+    createdAt: session.createdAt,
+  }));
+}
+
+// ── Restore session from persistence ──────────────────────────────
+function restoreSession(callSid, sessionData) {
+  sessions.set(callSid, sessionData);
+}
+
+module.exports = {
+  processInput,
+  processFallback,
+  endSession,
+  getSession,
+  setSessionPaused,
+  isSessionPaused,
+  getAllSessions,
+  restoreSession,
+  GATES,
+  matchIntent,
+  fuzzyMatchIntent,
+};

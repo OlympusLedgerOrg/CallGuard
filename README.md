@@ -1,8 +1,27 @@
 # CallGuard
 
-AI-powered voice receptionist for local service businesses — built on Twilio, Ava (local dialogue engine), and SQLite.
+AI-powered voice receptionist for local service businesses — built on Twilio, Ava (local dialogue engine), **VibeVoice** (real-time streaming), and SQLite.
 
 **No external database needed.** Everything runs in the app.
+
+## ✨ VibeVoice — Real-Time Streaming Voice AI
+
+VibeVoice is an optional upgrade that provides **ultra-low-latency voice conversations** (~300ms response time vs ~2-3s with standard Twilio).
+
+| Feature | Standard Mode | VibeVoice Mode |
+|---------|--------------|----------------|
+| Response latency | 2-3 seconds | ~300ms |
+| Speech-to-text | Twilio built-in | Deepgram streaming |
+| Text-to-speech | AWS Polly via Twilio | ElevenLabs streaming |
+| Voice quality | Good | Natural, expressive |
+| Cost per call | $0.013/min | +$0.01-0.02/min |
+
+To enable VibeVoice, add these keys to `server/.env`:
+```bash
+DEEPGRAM_API_KEY=your_deepgram_key      # https://deepgram.com
+ELEVENLABS_API_KEY=your_elevenlabs_key  # https://elevenlabs.io
+VIBEVOICE_ENABLED=true
+```
 
 ## Quick Start
 
@@ -58,6 +77,9 @@ npm start                            # → http://localhost:3000
 | `server/.env` | `GOOGLE_PRIVATE_KEY` | Google service account private key |
 | `server/.env` | `GOOGLE_CALENDAR_ID` | Google Calendar ID (default: `primary`) |
 | `server/.env` | `OPENAI_API_KEY` | OpenAI API key (optional) |
+| `server/.env` | `DEEPGRAM_API_KEY` | Deepgram API key for VibeVoice STT (optional) |
+| `server/.env` | `ELEVENLABS_API_KEY` | ElevenLabs API key for VibeVoice TTS (optional) |
+| `server/.env` | `VIBEVOICE_ENABLED` | Enable real-time streaming voice (default: auto) |
 | `server/.env` | `PORT` | Server port (default: `3000`) |
 | `server/.env` | `BASE_URL` | Public URL for Twilio webhooks (e.g. ngrok) |
 | `server/.env` | `OWNER_PHONE` | Phone number for missed-call / job-alert SMS |
@@ -319,6 +341,8 @@ npm test
 - [x] **Week 4** – Owner dashboard API + WebSocket for live calls
 - [x] **Week 5** – Mobile app for iOS & Android (Expo)
 - [x] **Week 6** – Ava dialogue engine (gate-based state machine, job requests, SMS templates, live call WebSocket)
+- [x] **Week 7** – Test My AI, Script Wizard, Call Me Back Queue, Offline Mode
+- [x] **Week 8** – VibeVoice (real-time streaming STT/TTS, owner takeover, analytics, session persistence)
 
 ## Adding a New Business Type
 

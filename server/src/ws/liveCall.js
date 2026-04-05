@@ -4,15 +4,29 @@
 //   - Owner join / take-over notifications
 //   - Mid-call SMS dispatch
 //
+// VibeVoice: Now actually pauses Ava and redirects call via Twilio REST API.
+//
 // The app connects when it sees LIVE CALL on the home screen.
 // The server pushes events; the app reacts without polling.
 
 const { WebSocketServer } = require("ws");
+const twilio = require("twilio");
 const { sendMidCallInfo } = require("../sms/sms");
+const { setSessionPaused } = require("../dialogue/ava");
+const { pauseMediaStream, resumeMediaStream } = require("./mediaStream");
 const db = require("../db/client");
+const cfg = require("../config");
 
 // callSid → Set<WebSocket>  (multiple owners could watch the same call)
 const callRooms = new Map();
+
+// Twilio client for call modifications
+function getTwilioClient() {
+  if (!cfg.twilioAccountSid || !cfg.twilioAuthToken) {
+    return null;
+  }
+  return twilio(cfg.twilioAccountSid, cfg.twilioAuthToken);
+}
 
 // ── Attach WS server to existing HTTP server ────────────────────
 function attachWebSocketServer(httpServer) {
@@ -54,16 +68,14 @@ function attachWebSocketServer(httpServer) {
           broadcastToRoom(callSid, { event: "mode_change", mode: "listen", ts: Date.now() }, ws);
           break;
 
-        // Owner is taking over the call — notify Ava to pause
+        // Owner is taking over the call — actually pause Ava and redirect
         case "take_over":
-          broadcastToRoom(callSid, { event: "mode_change", mode: "owner_live", ts: Date.now() });
-          await logCallEvent(callSid, "owner_took_over");
+          await handleOwnerTakeover(callSid, ws);
           break;
 
         // Owner handing back to Ava
         case "hand_back":
-          broadcastToRoom(callSid, { event: "mode_change", mode: "ai", ts: Date.now() });
-          await logCallEvent(callSid, "handed_back_to_ai");
+          await handleHandBackToAva(callSid, ws);
           break;
 
         // Owner sending info SMS to caller mid-call
@@ -71,7 +83,7 @@ function attachWebSocketServer(httpServer) {
           const { body, businessId, toNumber } = msg;
           if (!body || !toNumber) break;
           try {
-            const call = await db.calls.findFirst({ where: { call_sid: callSid } });
+            const call = await db.calls.findFirst({ where: { twilioCallSid: callSid } });
             const business = await db.businesses.findUnique({ where: { id: businessId } });
             if (!business) break;
 
@@ -151,12 +163,12 @@ function broadcastToRoom(callSid, payload, exclude = null) {
 // ── Log call event to DB ─────────────────────────────────────────
 async function logCallEvent(callSid, event) {
   try {
-    const call = await db.calls.findFirst({ where: { call_sid: callSid } });
+    const call = await db.calls.findFirst({ where: { twilioCallSid: callSid } });
     if (!call) return;
     if (event === "owner_took_over") {
       await db.calls.update({
         where: { id: call.id },
-        data:  { owner_joined: true },
+        data:  { aiHandled: false },
       });
     }
   } catch (err) {
@@ -164,9 +176,90 @@ async function logCallEvent(callSid, event) {
   }
 }
 
+// ── Handle owner takeover — actually pause Ava and redirect call ─
+async function handleOwnerTakeover(callSid, ws) {
+  console.log(`[WS] Owner takeover initiated for ${callSid}`);
+
+  // 1. Pause Ava session (stops processInput from responding)
+  setSessionPaused(callSid, true);
+
+  // 2. Pause media stream if VibeVoice is active
+  pauseMediaStream(callSid);
+
+  // 3. Redirect the active call to the takeover TwiML endpoint
+  const client = getTwilioClient();
+  if (client) {
+    try {
+      const takeoverUrl = `${cfg.baseUrl}/ava/voice/takeover`;
+      await client.calls(callSid).update({
+        url: takeoverUrl,
+        method: "POST",
+      });
+      console.log(`[WS] Call ${callSid} redirected to takeover endpoint`);
+    } catch (err) {
+      console.error(`[WS] Failed to redirect call ${callSid}:`, err.message);
+      ws.send(JSON.stringify({
+        event: "error",
+        message: `Failed to redirect call: ${err.message}`,
+        ts: Date.now(),
+      }));
+    }
+  } else {
+    console.warn(`[WS] No Twilio client — takeover is simulated only`);
+  }
+
+  // 4. Broadcast mode change and log
+  broadcastToRoom(callSid, { event: "mode_change", mode: "owner_live", ts: Date.now() });
+  await logCallEvent(callSid, "owner_took_over");
+
+  // 5. Confirm to the requesting client
+  ws.send(JSON.stringify({
+    event: "takeover_confirmed",
+    callSid,
+    ts: Date.now(),
+  }));
+}
+
+// ── Handle hand back to Ava — resume AI processing ───────────────
+async function handleHandBackToAva(callSid, ws) {
+  console.log(`[WS] Handing call ${callSid} back to Ava`);
+
+  // 1. Resume Ava session
+  setSessionPaused(callSid, false);
+
+  // 2. Resume media stream if VibeVoice is active
+  resumeMediaStream(callSid);
+
+  // 3. Redirect call back to Ava's input endpoint
+  const client = getTwilioClient();
+  if (client) {
+    try {
+      const inputUrl = `${cfg.baseUrl}/ava/voice/input?callSid=${encodeURIComponent(callSid)}`;
+      await client.calls(callSid).update({
+        url: inputUrl,
+        method: "POST",
+      });
+      console.log(`[WS] Call ${callSid} returned to Ava`);
+    } catch (err) {
+      console.error(`[WS] Failed to return call ${callSid} to Ava:`, err.message);
+    }
+  }
+
+  // 4. Broadcast and log
+  broadcastToRoom(callSid, { event: "mode_change", mode: "ai", ts: Date.now() });
+  await logCallEvent(callSid, "handed_back_to_ai");
+
+  ws.send(JSON.stringify({
+    event: "handback_confirmed",
+    callSid,
+    ts: Date.now(),
+  }));
+}
+
 module.exports = {
   attachWebSocketServer,
   pushTranscriptLine,
   pushCallStatus,
   pushDisposition,
+  broadcastToRoom,
 };

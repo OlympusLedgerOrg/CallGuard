@@ -3,6 +3,8 @@
  *
  * Uses a Google Service Account. Set GOOGLE_CLIENT_EMAIL and
  * GOOGLE_PRIVATE_KEY in your .env file.
+ *
+ * VibeVoice: Now supports per-business timezone configuration.
  */
 
 const { google } = require("googleapis");
@@ -24,9 +26,10 @@ function getCalendar() {
 /**
  * List free/busy slots for a given day.
  * @param {string} dateStr – ISO date string, e.g. "2026-04-01"
+ * @param {string} timezone – IANA timezone, e.g. "America/New_York"
  * @returns {Promise<Array<{start: string, end: string}>>} busy periods
  */
-async function getBusySlots(dateStr) {
+async function getBusySlots(dateStr, timezone = "America/New_York") {
   const cal = getCalendar();
   const timeMin = new Date(`${dateStr}T00:00:00`).toISOString();
   const timeMax = new Date(`${dateStr}T23:59:59`).toISOString();
@@ -35,6 +38,7 @@ async function getBusySlots(dateStr) {
     requestBody: {
       timeMin,
       timeMax,
+      timeZone: timezone,
       items: [{ id: cfg.googleCalendarId }],
     },
   });
@@ -44,17 +48,38 @@ async function getBusySlots(dateStr) {
 
 /**
  * Create a calendar event for a booking.
- * @param {{ summary: string, description: string, startTime: string, endTime: string, attendeeEmail?: string }} opts
+ * Includes double-booking prevention via optimistic conflict check.
+ * 
+ * @param {{ summary: string, description: string, startTime: string, endTime: string, attendeeEmail?: string, timezone?: string }} opts
  * @returns {Promise<object>} created event
+ * @throws {Error} if time slot is already booked
  */
-async function createEvent({ summary, description, startTime, endTime, attendeeEmail }) {
+async function createEvent({ summary, description, startTime, endTime, attendeeEmail, timezone = "America/New_York" }) {
   const cal = getCalendar();
 
+  // ── Double-booking prevention ──────────────────────────────────
+  // Check if the slot is still available before creating the event
+  const startDate = new Date(startTime);
+  const endDate = new Date(endTime);
+  const dateStr = startDate.toISOString().split("T")[0];
+
+  const busySlots = await getBusySlots(dateStr, timezone);
+  const hasConflict = busySlots.some(slot => {
+    const slotStart = new Date(slot.start);
+    const slotEnd = new Date(slot.end);
+    return startDate < slotEnd && endDate > slotStart;
+  });
+
+  if (hasConflict) {
+    throw new Error("TIME_SLOT_CONFLICT: This time slot is no longer available");
+  }
+
+  // ── Create the event ───────────────────────────────────────────
   const event = {
     summary,
     description,
-    start: { dateTime: startTime, timeZone: "America/New_York" },
-    end: { dateTime: endTime, timeZone: "America/New_York" },
+    start: { dateTime: startTime, timeZone: timezone },
+    end: { dateTime: endTime, timeZone: timezone },
   };
 
   if (attendeeEmail) {
@@ -64,6 +89,7 @@ async function createEvent({ summary, description, startTime, endTime, attendeeE
   const res = await cal.events.insert({
     calendarId: cfg.googleCalendarId,
     requestBody: event,
+    // Use conferenceDataVersion to support Google Meet links if needed
   });
 
   return res.data;
@@ -71,17 +97,26 @@ async function createEvent({ summary, description, startTime, endTime, attendeeE
 
 /**
  * Generate available 30-min slots for a date, excluding busy periods.
- * Business hours: 09:00 – 17:00
+ * Business hours: 09:00 – 17:00 (configurable)
+ * 
  * @param {string} dateStr – "YYYY-MM-DD"
- * @returns {Promise<string[]>} available slot start times as ISO strings
+ * @param {object} options – { timezone, startHour, endHour, slotMinutes }
+ * @returns {Promise<Array<{iso: string, label: string}>>} available slots
  */
-async function getAvailableSlots(dateStr) {
-  const busySlots = await getBusySlots(dateStr);
+async function getAvailableSlots(dateStr, options = {}) {
+  const {
+    timezone = "America/New_York",
+    startHour = 9,
+    endHour = 17,
+    slotMinutes = 30,
+  } = options;
+
+  const busySlots = await getBusySlots(dateStr, timezone);
 
   const slots = [];
-  const dayStart = new Date(`${dateStr}T09:00:00`);
-  const dayEnd = new Date(`${dateStr}T17:00:00`);
-  const slotDuration = 30 * 60 * 1000; // 30 minutes
+  const dayStart = new Date(`${dateStr}T${String(startHour).padStart(2, "0")}:00:00`);
+  const dayEnd = new Date(`${dateStr}T${String(endHour).padStart(2, "0")}:00:00`);
+  const slotDuration = slotMinutes * 60 * 1000;
 
   for (
     let t = dayStart.getTime();
@@ -96,7 +131,17 @@ async function getAvailableSlots(dateStr) {
       return slotStart < bEnd && slotEnd > bStart;
     });
     if (!isBusy) {
-      slots.push(slotStart.toISOString());
+      // Generate human-friendly label
+      const hour = slotStart.getHours();
+      const minute = slotStart.getMinutes();
+      const ampm = hour >= 12 ? "PM" : "AM";
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      const displayMinute = minute === 0 ? "" : `:${String(minute).padStart(2, "0")}`;
+      
+      slots.push({
+        iso: slotStart.toISOString(),
+        label: `${displayHour}${displayMinute} ${ampm}`,
+      });
     }
   }
 
