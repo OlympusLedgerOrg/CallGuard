@@ -41,8 +41,14 @@ const cfg: Config = {
   // VibeVoice — Real-time streaming voice AI
   deepgramApiKey: process.env.DEEPGRAM_API_KEY || "",
   elevenlabsApiKey: process.env.ELEVENLABS_API_KEY || "",
+  // VibeVoice requires both Deepgram and ElevenLabs keys, or explicit VIBEVOICE_ENABLED=true
   vibeVoiceEnabled: process.env.VIBEVOICE_ENABLED === "true" || 
     !!(process.env.DEEPGRAM_API_KEY && process.env.ELEVENLABS_API_KEY),
 };
+
+// Warn if only one VibeVoice key is configured
+if ((cfg.deepgramApiKey && !cfg.elevenlabsApiKey) || (!cfg.deepgramApiKey && cfg.elevenlabsApiKey)) {
+  console.warn("[Config] Warning: Only one VibeVoice API key is set. Both DEEPGRAM_API_KEY and ELEVENLABS_API_KEY are required for full VibeVoice functionality.");
+}
 
 export = cfg;

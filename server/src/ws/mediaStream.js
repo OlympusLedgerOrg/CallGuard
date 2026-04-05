@@ -272,10 +272,16 @@ function attachMediaStreamServer(httpServer, path = "/media-stream") {
             session = new MediaStreamSession(callSid, streamSid, ws);
             mediaStreams.set(callSid, session);
 
-            // Load business config
-            const bizConfig = customParameters?.bizConfig 
-              ? JSON.parse(customParameters.bizConfig)
-              : await loadBizConfigFromDB(customParameters?.toNumber);
+            // Load business config - handle JSON parse errors gracefully
+            let bizConfig;
+            try {
+              bizConfig = customParameters?.bizConfig 
+                ? JSON.parse(customParameters.bizConfig)
+                : await loadBizConfigFromDB(customParameters?.toNumber);
+            } catch (parseErr) {
+              console.error(`[MediaStream] Failed to parse bizConfig for ${callSid}:`, parseErr.message);
+              bizConfig = await loadBizConfigFromDB(customParameters?.toNumber);
+            }
 
             await session.initialize(bizConfig.config, bizConfig.businessId);
             break;
