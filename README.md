@@ -1,26 +1,60 @@
 # CallGuard
 
-CallGuard is a call-management service that will use **VibeVoice** for both Text-to-Speech (TTS) and Automatic Speech Recognition (ASR).
+CallGuard is a Python-based voice call management service built with [Flask](https://flask.palletsprojects.com/). It exposes a REST API for Text-to-Speech (TTS) and Automatic Speech Recognition (ASR), designed to be integrated with [VibeVoice](https://github.com/microsoft/vibevoice) for real-time AI-powered call handling.
+
+---
+
+## Table of Contents
+
+- [Project Structure](#project-structure)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Running the Service](#running-the-service)
+- [API Reference](#api-reference)
+  - [POST /api/tts](#post-apitts)
+  - [POST /api/asr](#post-apiasr)
+- [Error Handling](#error-handling)
+- [Roadmap](#roadmap)
+
+---
 
 ## Project Structure
 
 ```
 CallGuard/
-├── app.py            # Flask application entry point
-├── requirements.txt  # Python dependencies
+├── app.py            # Flask application — routes, config, and error handlers
+├── requirements.txt  # Python dependencies (Flask, vibevoice)
 └── README.md
 ```
 
+---
+
 ## Requirements
 
-- Python 3.10+
+- Python 3.10 or later
 - pip
+
+---
 
 ## Installation
 
 ```bash
 pip install -r requirements.txt
 ```
+
+---
+
+## Configuration
+
+All configuration is supplied through environment variables.
+
+| Variable            | Default      | Description                                                       |
+|---------------------|--------------|-------------------------------------------------------------------|
+| `FLASK_DEBUG`       | `0`          | Set to `1` to enable Flask debug mode (development only).        |
+| `MAX_CONTENT_LENGTH`| `52428800`   | Maximum accepted request body size in bytes (default: 50 MB).    |
+
+---
 
 ## Running the Service
 
@@ -30,39 +64,83 @@ python app.py
 
 The server starts on `http://localhost:5000` (Flask's default port).
 
-To enable debug mode, set `FLASK_DEBUG=1`:
+**Development mode** (auto-reload + detailed error pages):
 
 ```bash
 FLASK_DEBUG=1 python app.py
 ```
 
-## API Endpoints
+**Custom upload limit** (e.g., 100 MB):
 
-### `POST /api/tts`
+```bash
+MAX_CONTENT_LENGTH=104857600 python app.py
+```
+
+---
+
+## API Reference
+
+### POST /api/tts
 
 Convert text to speech.
 
-**Request body (JSON):**
+**Request**
+
+`Content-Type: application/json`
+
 ```json
-{ "text": "Hello, how can I help you?" }
+{
+  "text": "Hello, how can I help you?"
+}
 ```
 
-**Response:**
+**Response `200 OK`**
+
 ```json
-{ "status": "ok", "message": "TTS placeholder", "text": "Hello, how can I help you?" }
+{
+  "status": "ok",
+  "message": "TTS placeholder",
+  "text": "Hello, how can I help you?"
+}
 ```
 
-### `POST /api/asr`
+---
 
-Transcribe audio to text.
+### POST /api/asr
 
-**Request:** multipart form-data with an `audio` file field.
+Transcribe an audio recording to text.
 
-**Response:**
+**Request**
+
+`Content-Type: multipart/form-data`
+
+| Field   | Type | Description                        |
+|---------|------|------------------------------------|
+| `audio` | file | Audio file to transcribe.          |
+
+**Response `200 OK`**
+
 ```json
-{ "status": "ok", "message": "ASR placeholder", "transcript": "" }
+{
+  "status": "ok",
+  "message": "ASR placeholder",
+  "transcript": ""
+}
 ```
 
-## VibeVoice Integration
+---
 
-The TTS and ASR endpoints are currently placeholders. Full integration with the `vibevoice` library will be added in subsequent iterations to enable real-time voice synthesis and transcription for calls.
+## Error Handling
+
+| Status | Cause                                              | Response body                                                                 |
+|--------|----------------------------------------------------|-------------------------------------------------------------------------------|
+| `413`  | Audio upload exceeds `MAX_CONTENT_LENGTH`          | `{"status": "error", "message": "Audio file exceeds the maximum allowed size of <N> MB."}` |
+
+---
+
+## Roadmap
+
+- [ ] Wire `/api/tts` to VibeVoice text-to-speech synthesis
+- [ ] Wire `/api/asr` to VibeVoice automatic speech recognition
+- [ ] Stream audio in/out for low-latency real-time calls
+- [ ] Authentication / API key middleware

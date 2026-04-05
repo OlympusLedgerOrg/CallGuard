@@ -1,8 +1,31 @@
 import os
 
 from flask import Flask, jsonify, request
+from werkzeug.exceptions import RequestEntityTooLarge
 
 app = Flask(__name__)
+
+# Maximum allowed audio upload size (default 50 MB; override with MAX_CONTENT_LENGTH env var).
+_DEFAULT_MAX_BYTES = 50 * 1024 * 1024
+try:
+    app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_CONTENT_LENGTH", str(_DEFAULT_MAX_BYTES)))
+except (TypeError, ValueError):
+    app.config["MAX_CONTENT_LENGTH"] = _DEFAULT_MAX_BYTES
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_request_entity_too_large(e):
+    """Return a structured JSON 413 response instead of an unhandled HTML error."""
+    limit_mb = app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)
+    return (
+        jsonify(
+            {
+                "status": "error",
+                "message": f"Audio file exceeds the maximum allowed size of {limit_mb} MB.",
+            }
+        ),
+        413,
+    )
 
 
 @app.route("/api/tts", methods=["POST"])
